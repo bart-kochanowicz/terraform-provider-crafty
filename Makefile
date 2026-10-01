@@ -2,6 +2,8 @@ GO ?= go
 VERSION ?= 0.1.0
 GOLANGCI_LINT ?= golangci-lint
 TERRAFORM ?= terraform
+DOCKER ?= docker
+DEV_COMPOSE := $(DOCKER) compose -f dev/compose.yml
 BINARY := terraform-provider-crafty
 PLATFORM := $(shell $(GO) env GOOS)_$(shell $(GO) env GOARCH)
 PLUGIN_DIR ?= $(HOME)/.terraform.d/plugins/registry.terraform.io/bart-kochanowicz/crafty/$(VERSION)/$(PLATFORM)
@@ -29,3 +31,21 @@ install: build
 	cp bin/$(BINARY) "$(PLUGIN_DIR)/$(BINARY)_v$(VERSION)"
 clean:
 	rm -rf bin
+
+.PHONY: dev-up dev-down dev-status dev-logs dev-credentials dev-check dev-provider
+dev-up:
+	$(DEV_COMPOSE) up -d --wait --wait-timeout 240
+dev-down:
+	$(DEV_COMPOSE) down
+dev-status:
+	$(DEV_COMPOSE) ps
+dev-logs:
+	$(DEV_COMPOSE) logs -f --tail=100
+dev-credentials:
+	$(DEV_COMPOSE) exec crafty cat /crafty/app/config/default-creds.txt
+dev-check:
+	$(DEV_COMPOSE) config --quiet
+dev-provider: build
+	@mkdir -p bin
+	@printf 'provider_installation {\n  dev_overrides {\n    "registry.terraform.io/bart-kochanowicz/crafty" = "%s/bin"\n  }\n  direct {}\n}\n' "$(CURDIR)" > bin/dev.tfrc
+	@echo "Run: export TF_CLI_CONFIG_FILE=\"$(CURDIR)/bin/dev.tfrc\""

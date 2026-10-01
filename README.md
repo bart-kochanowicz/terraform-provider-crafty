@@ -111,6 +111,10 @@ Memory uses Crafty's Java download inputs (GiB), not bytes. The supplied specifi
 - Bedrock creation and importing existing servers are not implemented. The supplied API cannot reconstruct Java download inputs for an import.
 - The provider does not start the server, accept Minecraft EULA on your behalf, or modify server files. Complete required setup in Crafty.
 
+## Local Docker environment
+
+A real Crafty development environment is available in `dev/compose.yml`. Start it with `make dev-up`, then follow [the environment guide](dev/README.md) to create an API token and use `examples/docker`. Ports are restricted to loopback, and named volumes preserve test data.
+
 ## Testing
 
 ```sh

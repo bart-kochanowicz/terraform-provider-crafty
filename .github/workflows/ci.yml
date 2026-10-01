@@ -53,11 +53,13 @@ jobs:
           go mod verify
           go mod tidy
           git diff --exit-code -- go.mod go.sum
+      - name: Validate Docker Compose configuration
+        run: make dev-check
       - name: Check formatting
         run: make fmt-check
       - name: Test and build
         run: make test vet build
-      - name: Validate Terraform example with the local provider
+      - name: Validate Terraform examples with the local provider
         shell: bash
         run: |
           config="$RUNNER_TEMP/crafty.tfrc"
@@ -70,3 +72,4 @@ jobs:
           }
           EOF_CONFIG
           TF_CLI_CONFIG_FILE="$config" terraform -chdir=examples/local validate
+          TF_CLI_CONFIG_FILE="$config" terraform -chdir=examples/docker validate

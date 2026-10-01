@@ -29,4 +29,4 @@ Use Go's standard `*_test.go` convention. Tests stay beside their packages inste
 
 ## Live verification
 
-Use a disposable Crafty instance for live verification. Follow the README to install the provider, apply the example, rename the server, check convergence, and destroy it. Never use production world data for destructive tests.
+Run `make dev-up` for a local Docker instance and follow [the environment guide](dev/README.md). Use a disposable Crafty instance for live verification. Follow the README to install the provider, apply the example, rename the server, check convergence, and destroy it. Never use production world data for destructive tests.
