@@ -1,0 +1,32 @@
+# Contributing
+
+## Development setup
+
+Install Go 1.25 or newer, Terraform 1.5 or newer, Make, and golangci-lint v2.14.0. Download dependencies with `go mod download`.
+
+```sh
+make fmt
+make check
+```
+
+The lint configuration and GitHub Actions workflow are shared across all packages. Checks do not require a live Crafty instance or API token. Tests using `httptest` require permission to bind a local port.
+
+## Package boundaries
+
+- `main.go` starts the Terraform plugin server and supplies build version metadata.
+- `internal/provider` owns Terraform schemas, plan validation, resource lifecycle, state conversion, and diagnostics.
+- `internal/client` owns authentication, HTTP transport, API error handling, typed JSON requests/responses, and server endpoints. It must not import the Terraform Plugin Framework.
+- `docs` contains provider and resource references.
+- `examples` contains runnable Terraform configurations.
+
+Keep Terraform types and diagnostic messages in the provider package. Keep endpoint paths and JSON field names in the API client. Preserve documented OpenAPI limitations; do not infer unsupported mutable fields from read response fields.
+
+## Adding resources
+
+Add typed requests/responses and endpoint methods to the client, then add a resource constructor, schema, state model, and lifecycle methods to the provider. Register the constructor in `craftyProvider.Resources`. Add endpoint behavior tests next to client code and lifecycle tests next to resource code. Update resource documentation and an example.
+
+Use Go's standard `*_test.go` convention. Tests stay beside their packages instead of in a separate test directory. API tests exercise HTTP failures, response decoding, and credential handling. Resource tests exercise CRUD and Terraform state with a mock HTTP server; they are not live Terraform acceptance tests.
+
+## Live verification
+
+Use a disposable Crafty instance for live verification. Follow the README to install the provider, apply the example, rename the server, check convergence, and destroy it. Never use production world data for destructive tests.

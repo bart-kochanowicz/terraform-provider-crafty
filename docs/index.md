@@ -1,0 +1,26 @@
+---
+page_title: "Crafty Provider"
+description: "Manage Minecraft Java servers through Crafty Controller v4."
+---
+
+# Crafty Provider
+
+The Crafty provider manages Minecraft Java servers through Crafty Controller v4's v2 API.
+
+```hcl
+provider "crafty" {
+  url   = var.crafty_url
+  token = var.crafty_token
+}
+```
+
+## Provider configuration
+
+| Attribute | Type | Required | Description |
+| --- | --- | --- | --- |
+| `url` | String | Yes | Absolute HTTP/HTTPS panel base URL without `/api/v2`. |
+| `token` | String | Yes | Sensitive API Bearer token with server creation, access, and configuration permissions. |
+
+TLS certificates are verified. Redirects are rejected. HTTP requests time out after 120 seconds.
+
+See [the Minecraft resource](resources/minecraft_server.md) and the complete configuration in `examples/local/main.tf`. Build and installation instructions are in the repository README.
