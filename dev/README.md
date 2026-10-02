@@ -63,6 +63,51 @@ unset TF_CLI_CONFIG_FILE
 
 These are manual integration tests against real Crafty. Unit tests remain independent of Docker.
 
+## Automated acceptance tests
+
+The acceptance suite uses `terraform-plugin-testing` and a local Terraform binary
+(1.5 or newer). From the repository root, with an API token created as described above:
+
+```sh
+read -rs CRAFTY_TOKEN
+export CRAFTY_TOKEN
+make test-acc
+unset CRAFTY_TOKEN
+```
+
+`make test-acc` starts or reuses `dev/compose.yml`, waits for healthy services,
+and runs uncached acceptance tests with the race detector and a 30-minute timeout.
+It does not stop the stack or remove its volumes. No installed provider or
+`make dev-provider` is needed: the suite serves the provider directly over protocol 6.
+Unset `TF_CLI_CONFIG_FILE` if it contains development overrides, so Terraform's
+test initialization is not affected by your manual smoke-test configuration.
+
+The test creates a uniquely named `tf-acc-*` server, verifies state against the API,
+refreshes it, renames it without replacing its ID, checks an empty plan, and lets
+the test framework destroy it. `CheckDestroy` polls the API to verify removal.
+A Go cleanup callback also deletes this run's server by captured ID or exact
+randomized name if a step fails, including creation before an ID reaches state.
+Cleanup errors fail the test. Forced termination (`kill -9`, a Go test timeout,
+or Docker/API failure) can prevent cleanup; inspect Crafty for the reported
+`tf-acc-*` resource and delete it manually after restoring connectivity.
+The suite does not delete unrelated servers or volumes.
+
+Optional environment variables:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `CRAFTY_URL` | `http://127.0.0.1:18000` | Disposable instance API base URL |
+| `CRAFTY_TEST_ENGINE` | `paper` | Engine available in the download catalog |
+| `CRAFTY_TEST_VERSION` | `1.21.1` | Version available for that engine |
+
+Creation requires internet access from Crafty. The server uses 1–2 GiB memory
+settings and port 25565, but is never started and its EULA is not accepted.
+Do not point these tests at a production instance. The token is passed through a
+sensitive Terraform input variable; avoid debug logging and keep test artifacts private.
+
+`make test` skips acceptance tests unless `TF_ACC=1` is explicitly set. GitHub
+Actions continues to run offline tests; it does not start Crafty or run this suite.
+
 ## Stop and preserve data
 
 ```sh

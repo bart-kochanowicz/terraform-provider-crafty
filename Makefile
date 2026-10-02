@@ -49,3 +49,9 @@ dev-provider: build
 	@mkdir -p bin
 	@printf 'provider_installation {\n  dev_overrides {\n    "registry.terraform.io/bart-kochanowicz/crafty" = "%s/bin"\n  }\n  direct {}\n}\n' "$(CURDIR)" > bin/dev.tfrc
 	@echo "Run: export TF_CLI_CONFIG_FILE=\"$(CURDIR)/bin/dev.tfrc\""
+
+# Live acceptance tests use the existing disposable Compose environment.
+.PHONY: test-acc
+test-acc: dev-up
+	@command -v "$(TERRAFORM)" >/dev/null
+	TF_ACC=1 TF_ACC_TERRAFORM_PATH="$$(command -v "$(TERRAFORM)")" $(GO) test -v -race -count=1 -timeout 30m ./internal/provider -run '^TestAcc'
