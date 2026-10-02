@@ -81,7 +81,7 @@ With development overrides, skip `terraform init` for this example and run `terr
 
 ## Configuration
 
-Provider attributes `url` and `token` are required strings. `url` is the panel base URL, without `/api/v2`. `token` is sensitive and is sent as a Bearer token. TLS verification remains enabled. Redirects are rejected to avoid sending credentials to another endpoint. Requests have a 120-second timeout. API response bodies are omitted from errors to protect secrets.
+Provider attributes `url` and `token` are required strings. `url` is the panel base URL, without `/api/v2`. `token` is sensitive and is sent as a Bearer token. TLS verification remains enabled. Redirects are rejected to avoid sending credentials to another endpoint. Individual requests have a 120-second timeout, further limited by the resource operation deadline. Resource `timeouts` default to 10 minutes for create, 2 minutes for read, and 5 minutes each for update and delete. API response bodies are omitted from errors to protect secrets.
 
 See [the complete example](examples/local/main.tf).
 
@@ -101,13 +101,15 @@ Memory uses Crafty's Java download inputs (GiB), not bytes. The supplied specifi
 ## API scope and specification limitations
 
 - POST `/api/v2/servers` creates a Minecraft Java server using `minecraft_java` and `download_jar`.
-- GET `/api/v2/servers` reads the documented `Server` objects and finds the server by ID. The supplied single-server GET schema incorrectly contains role fields, so it is deliberately not used. A missing server in a successful collection response removes the resource from Terraform state. A collection 404 is an endpoint error, not proof that the server was deleted.
+- GET `/api/v2/servers` reads the documented `Server` objects and finds the server by ID. The supplied single-server GET schema incorrectly contains role fields, so it is deliberately not used. Three consecutive successful collection responses without an established server remove it from Terraform state. A server whose post-create/update refresh is pending retains its ID while preparation or API recovery continues. A collection 404 is an endpoint error, not proof that the server was deleted.
 - PATCH `/api/v2/servers/{serverID}` updates only `server_name`, the sole documented PATCH field. There is no documented PUT operation.
 - DELETE `/api/v2/servers/{serverID}` deletes the server. HTTP 404 is treated as already deleted.
 - HTTP 401/403, other non-success HTTP statuses, malformed JSON, and application-level unsuccessful statuses become English Terraform diagnostics.
 - Download inputs are not returned by the Server schema and remain in state. Drift detection covers the name and computed automatic-start setting; it cannot verify RAM, engine, version, or download-time monitoring configuration.
 - Changing download inputs replaces the server and can delete its files. Review plans and back up world data before applying replacements or running `terraform destroy`.
-- Creation can finish preparing asynchronously. The ID is saved before the post-create read. If a created server is not visible yet, rerun `terraform plan` after preparation completes; inspect the panel before retrying a creation whose response was lost.
+- Creation can finish preparing asynchronously. The ID and a private pending-refresh marker are saved before polling GET for complete metadata and the requested name. If polling times out or fails after Crafty returned an ID, the provider returns a warning and keeps that ID without tainting the resource. A later `terraform plan` resumes the refresh. This confirms API metadata visibility, not that Minecraft has started or that every background download succeeded.
+- Only reads are retried: selected transient HTTP statuses (408, 429, 500, 502, 503, 504), transport timeouts, connection interruptions, and temporary DNS failures. Backoff starts at 1 second and doubles to a 10-second maximum; `Retry-After` can extend the delay within the operation deadline. Authentication, endpoint, malformed-response, and application-status errors stop immediately.
+- POST, PATCH, and DELETE are sent once per operation. After an accepted rename, the desired name and ID are saved even if the following read fails. After an accepted DELETE, the provider polls until the ID disappears; a verification failure leaves the ID in state for a later destroy attempt. Inspect Crafty before retrying a create whose response was lost: without a returned ID, the provider cannot safely identify the new server.
 - Bedrock creation and importing existing servers are not implemented. The supplied API cannot reconstruct Java download inputs for an import.
 - The provider does not start the server, accept Minecraft EULA on your behalf, or modify server files. Complete required setup in Crafty.
 

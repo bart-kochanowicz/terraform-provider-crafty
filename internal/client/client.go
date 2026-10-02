@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -29,6 +30,7 @@ type Client struct {
 // APIError describes an unsuccessful HTTP response without exposing its body.
 type APIError struct {
 	StatusCode   int
+	RetryAfter   time.Duration
 	method, path string
 }
 
@@ -71,7 +73,7 @@ func (c *Client) request(ctx context.Context, method, path string, body, result 
 		_ = resp.Body.Close()
 	}()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return &APIError{resp.StatusCode, method, path}
+		return &APIError{StatusCode: resp.StatusCode, method: method, path: path, RetryAfter: retryAfter(resp.Header.Get("Retry-After"))}
 	}
 	b, err := io.ReadAll(io.LimitReader(resp.Body, 8*1024*1024+1))
 	if err != nil {
@@ -106,4 +108,17 @@ func (c *Client) request(ctx context.Context, method, path string, body, result 
 		}
 	}
 	return nil
+}
+
+// Retry-After can be a non-negative delay in seconds or an HTTP date.
+func retryAfter(value string) time.Duration {
+	if seconds, err := strconv.ParseUint(value, 10, 32); err == nil {
+		return time.Duration(seconds) * time.Second
+	}
+	if date, err := http.ParseTime(value); err == nil {
+		if delay := time.Until(date); delay > 0 {
+			return delay
+		}
+	}
+	return 0
 }

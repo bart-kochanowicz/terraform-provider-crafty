@@ -23,7 +23,7 @@ func TestRefreshPreservesDownloadInputs(t *testing.T) {
 	}))
 	defer server.Close()
 	s := &serverResource{client: client.New(server.URL, "")}
-	m := serverModel{ID: types.StringValue("abc"), Engine: types.StringValue("paper"), MemMax: types.Int64Value(2)}
+	m := serverModel{Timeouts: testTimeouts(nil), ID: types.StringValue("abc"), Engine: types.StringValue("paper"), MemMax: types.Int64Value(2)}
 	found, err := s.refresh(context.Background(), &m)
 	if err != nil || !found || m.Name.ValueString() != "changed" || !m.AutoStart.ValueBool() || m.Engine.ValueString() != "paper" || m.MemMax.ValueInt64() != 2 {
 		t.Fatalf("unexpected refresh: %+v, %v", m, err)
@@ -81,7 +81,7 @@ func TestResourceCRUD(t *testing.T) {
 	var schemaResponse resource.SchemaResponse
 	s.Schema(ctx, resource.SchemaRequest{}, &schemaResponse)
 	plan := tfsdk.Plan{Schema: schemaResponse.Schema}
-	m := serverModel{ID: types.StringUnknown(), Name: types.StringValue(name), Engine: types.StringValue("paper"), Version: types.StringValue("1.21.1"), MemMin: types.Int64Value(1), MemMax: types.Int64Value(2), Host: types.StringValue("127.0.0.1"), Port: types.Int64Value(25565), AutoStart: types.BoolUnknown()}
+	m := serverModel{Timeouts: testTimeouts(nil), ID: types.StringUnknown(), Name: types.StringValue(name), Engine: types.StringValue("paper"), Version: types.StringValue("1.21.1"), MemMin: types.Int64Value(1), MemMax: types.Int64Value(2), Host: types.StringValue("127.0.0.1"), Port: types.Int64Value(25565), AutoStart: types.BoolUnknown()}
 	if d := plan.Set(ctx, &m); d.HasError() {
 		t.Fatal(d)
 	}
