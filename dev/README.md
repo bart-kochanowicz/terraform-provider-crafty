@@ -83,7 +83,9 @@ Unset `TF_CLI_CONFIG_FILE` if it contains development overrides, so Terraform's
 test initialization is not affected by your manual smoke-test configuration.
 
 The test creates a uniquely named `tf-acc-*` server, verifies state against the API,
-refreshes it, renames it without replacing its ID, checks an empty plan, and lets
+refreshes it, renames it and updates automatic start, monitoring address/port, and
+launch command without replacing its ID, repairs external drift, checks an empty
+plan, tests omission and ID-only import rejection, and lets
 the test framework destroy it. `CheckDestroy` polls the API to verify removal.
 A Go cleanup callback also deletes this run's server by captured ID or exact
 randomized name if a step fails, including creation before an ID reaches state.
@@ -100,8 +102,8 @@ Optional environment variables:
 | `CRAFTY_TEST_ENGINE` | `paper` | Engine available in the download catalog |
 | `CRAFTY_TEST_VERSION` | `1.21.1` | Version available for that engine |
 
-Creation requires internet access from Crafty. The server uses Crafty memory inputs 1–2
-(1000–2000 JVM MiB) and port 25565, but is never started and its EULA is not accepted.
+Creation requires internet access from Crafty. The server uses creation memory inputs 1–2 and port 25565; mutable command/monitoring
+probes then override these settings. It is never started and its EULA is not accepted.
 Do not point these tests at a production instance. The token is passed through a
 sensitive Terraform input variable; avoid debug logging and keep test artifacts private.
 
@@ -130,11 +132,12 @@ A different image version fails the contract guard until its baseline is reviewe
 The report `api-contract.json` is published for seven days on both success and
 failure and contains no credentials or server paths.
 
-The test uses the same create, refresh, rename, empty-plan, and destroy suite as
-`make test-acc`. A second Terraform acceptance scenario uses a controlled HTTP
-server to verify recovery after post-create/update failures, preserved private
-state, no taint, no duplicate POST, and empty plans after API recovery. A failure uploads an artifact with the acceptance output (if the
-tests started), container logs, Compose status, and Crafty application logs. Artifacts
+The test uses the same lifecycle, mutable-settings, drift, import-rejection, and
+destroy suite as `make test-acc`. Additional Terraform acceptance scenarios use a
+controlled HTTP server to verify recovery after post-create/update failures,
+including a rejected initial settings PATCH, preserved private state, no taint,
+no duplicate POST, and empty plans after API recovery. A failure uploads an artifact
+with the acceptance output (if the tests started), container logs, Compose status, and Crafty application logs. Artifacts
 are retained for seven days. Database files, credentials, and Terraform state are
 excluded. The final cleanup step runs even after failures and removes only that
 job's containers, network, and volumes. GitHub-hosted runners are discarded if a

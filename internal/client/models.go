@@ -40,13 +40,20 @@ type CreatedServer struct {
 // Server contains the fields required to refresh Terraform state.
 // Pointers distinguish missing response fields from valid zero values.
 type Server struct {
-	ID        string  `json:"server_id"`
-	Name      *string `json:"server_name"`
-	AutoStart *bool   `json:"auto_start"`
+	ID               string  `json:"server_id"`
+	Name             *string `json:"server_name"`
+	AutoStart        *bool   `json:"auto_start"`
+	MonitoringHost   *string `json:"server_ip"`
+	MonitoringPort   *int64  `json:"server_port"`
+	ExecutionCommand *string `json:"execution_command"`
 }
 
-// UpdateServerRequest contains the name update supported by this provider.
-// Crafty 4.10.4 accepts additional configuration fields; see docs/api-contract.md.
+// UpdateServerRequest contains verified mutable Crafty configuration fields.
+// Optional pointers distinguish omitted fields from false and other zero values.
 type UpdateServerRequest struct {
-	Name string `json:"server_name"`
+	Name             string  `json:"server_name,omitempty"`
+	AutoStart        *bool   `json:"auto_start,omitempty"`
+	MonitoringHost   *string `json:"server_ip,omitempty"`
+	MonitoringPort   *int64  `json:"server_port,omitempty"`
+	ExecutionCommand *string `json:"execution_command,omitempty"`
 }

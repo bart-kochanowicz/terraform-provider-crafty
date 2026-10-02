@@ -98,23 +98,39 @@ See [the complete example](examples/local/main.tf).
 | `mem_min`, `mem_max` | Int64 | `download_jar_create_data.mem_min`, `mem_max` | Replacement |
 | `host` | String | `minecraft_java_monitoring_data.host` | Replacement |
 | `port` | Int64 | Monitoring port and `server_properties_port` | Replacement |
-| `auto_start` | Boolean | Server `auto_start` | Computed, read-only |
+| `auto_start` | Boolean | PATCH/GET `auto_start` | Optional + computed, mutable |
+| `monitoring_host` | String | PATCH/GET `server_ip` | Optional + computed, mutable |
+| `monitoring_port` | Int64 | PATCH/GET `server_port` | Optional + computed, mutable; monitoring only |
+| `execution_command` | String | PATCH/GET `execution_command` | Optional + computed, mutable; overrides generated command |
 
 Memory uses Crafty 4.10.4 Java download units: each input unit produces **1000 JVM MiB**, so `mem_min = 1` and `mem_max = 2` generate `-Xms1000M -Xmx2000M`. These are not exact GiB. Inputs remain integers with `1 <= mem_min <= mem_max`; the port must be 1–65535. Names require at least two characters and exclude slashes, backslashes, and `#`. Other input strings must not be empty. See the [verified API contract and supported versions](docs/api-contract.md).
+
+Optional settings can be supplied during creation or added later. Creation waits for
+metadata, then sends one settings PATCH within the create timeout. A rejected or
+uncertain initial PATCH preserves the ID and warns; the next plan reads actual
+settings, and apply reconciles any drift without creating another server.
+
+`host` and `port` retain their original creation semantics. Use `monitoring_host`
+and `monitoring_port` for mutable monitoring; these do not change `server.properties`.
+An explicit `execution_command` overrides generated JVM flags, so creation-time
+`mem_min`/`mem_max` no longer describe the effective command. These inputs still
+require replacement when changed. Removing an optional setting stops enforcing it
+and retains the value reported by Crafty; it does not restore the original default.
+See [the resource guide](docs/resources/minecraft_server.md) for an example and limits.
 
 ## API scope and specification limitations
 
 - POST `/api/v2/servers` creates a Minecraft Java server using `minecraft_java` and `download_jar`.
 - GET `/api/v2/servers` reads visible server objects and finds the server by ID. Crafty 4.10.4 also returns server objects from single GET, contrary to the specification's role schema; the provider retains collection reads because single GET uses ambiguous HTTP 400 `NOT_AUTHORIZED` for a missing ID. Three consecutive successful collection responses without an established server remove it from Terraform state. A server whose post-create/update refresh is pending retains its ID while preparation or API recovery continues. A collection 404 is an endpoint error, not proof that the server was deleted.
-- PATCH `/api/v2/servers/{serverID}` updates only `server_name` within this provider. The live API also accepts configuration fields such as `auto_start`, `server_ip`, `server_port`, and `execution_command`; those capabilities are tested and documented but are not exposed as mutable resource inputs. There is no documented PUT operation.
+- PATCH `/api/v2/servers/{serverID}` updates name, automatic start, monitoring address/port, and launch command without replacing the ID. Only changed, known settings are sent; an explicit `false` is preserved. There is no documented PUT operation.
 - DELETE `/api/v2/servers/{serverID}` deletes the server. HTTP 404 is treated as already deleted.
 - HTTP 401/403, other non-success HTTP statuses, malformed JSON, and application-level unsuccessful statuses become English Terraform diagnostics.
-- Creation inputs remain in state. Drift detection currently covers the name and computed automatic-start setting. GET also exposes the execution command and current monitoring address/port, but does not reconstruct the complete original download payload or server.properties port.
+- Creation inputs remain in state. Reads refresh name, automatic start, monitoring address/port, and launch command. Explicit optional settings are reconciled on apply; omitted settings are observed without enforcing a default. GET also exposes the execution command and current monitoring address/port, but does not reconstruct the complete original download payload or server.properties port.
 - Changing download inputs replaces the panel record and creates a new directory. In verified Crafty 4.10.4, the provider's default DELETE preserves files; it does not reuse old worlds during replacement. Review plans, back up data, and manage retained directories separately.
 - Creation can finish preparing asynchronously. The ID and a private pending-refresh marker are saved before polling GET for complete metadata and the requested name. If polling times out or fails after Crafty returned an ID, the provider returns a warning and keeps that ID without tainting the resource. A later `terraform plan` resumes the refresh. This confirms API metadata visibility, not that Minecraft has started or that every background download succeeded.
 - Only reads are retried: selected transient HTTP statuses (408, 429, 500, 502, 503, 504), transport timeouts, connection interruptions, and temporary DNS failures. Backoff starts at 1 second and doubles to a 10-second maximum; `Retry-After` can extend the delay within the operation deadline. Authentication, endpoint, malformed-response, and application-status errors stop immediately.
-- POST, PATCH, and DELETE are sent once per operation. After an accepted rename, the desired name and ID are saved even if the following read fails. After an accepted DELETE, the provider polls until the ID disappears; a verification failure leaves the ID in state for a later destroy attempt. Inspect Crafty before retrying a create whose response was lost: without a returned ID, the provider cannot safely identify the new server.
-- Bedrock creation and importing existing servers are not implemented. The supplied API cannot reconstruct Java download inputs for an import.
+- POST and DELETE are sent once per operation; each configuration PATCH is sent once. After an accepted configuration PATCH, desired settings and ID are saved even if the following read fails. After an accepted DELETE, the provider polls until the ID disappears; a verification failure leaves the ID in state for a later destroy attempt. Inspect Crafty before retrying a create whose response was lost: without a returned ID, the provider cannot safely identify the new server.
+- Bedrock creation is not implemented. ID-only import is rejected with a specific diagnostic: verified GET cannot reliably reconstruct all required Java download inputs. No values are guessed from filenames, URLs, or arbitrary commands. See [import limitations](docs/resources/minecraft_server.md#import).
 - The provider does not start the server, accept Minecraft EULA on your behalf, or modify server files. Complete required setup in Crafty.
 
 ## Local Docker environment

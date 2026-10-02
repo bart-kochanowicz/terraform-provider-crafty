@@ -23,7 +23,7 @@ func (c *Client) ListServers(ctx context.Context) ([]Server, error) {
 	return result, err
 }
 
-// UpdateServer updates a server's name.
+// UpdateServer patches only the supplied server configuration fields.
 func (c *Client) UpdateServer(ctx context.Context, id string, request UpdateServerRequest) error {
 	return c.request(ctx, http.MethodPatch, "/api/v2/servers/"+url.PathEscape(id), request, nil)
 }

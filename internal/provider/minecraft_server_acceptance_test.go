@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"os"
+	"regexp"
 	"testing"
 	"time"
 
@@ -69,7 +70,11 @@ func TestAccMinecraftServerLifecycle(t *testing.T) {
 			}
 		}
 	})
-	config := func(serverName string) string {
+	config := func(serverName string, settings ...string) string {
+		extra := ""
+		if len(settings) > 0 {
+			extra = settings[0]
+		}
 		return fmt.Sprintf(`
 variable "crafty_acceptance_token" {
  type = string
@@ -87,8 +92,9 @@ resource "crafty_minecraft_server" "test" {
  mem_max = 2
  host = "127.0.0.1"
  port = 25565
+ %s
 }
-`, endpoint, serverName, engine, version)
+`, endpoint, serverName, engine, version, extra)
 	}
 	check := func(expectedName string) resource.TestCheckFunc {
 		return resource.ComposeTestCheckFunc(
@@ -117,6 +123,10 @@ resource "crafty_minecraft_server" "test" {
 				}
 				for _, server := range servers {
 					if server.ID == id && server.Name != nil && *server.Name == expectedName {
+						attrs := stored.Primary.Attributes
+						if server.AutoStart == nil || fmt.Sprint(*server.AutoStart) != attrs["auto_start"] || server.MonitoringHost == nil || *server.MonitoringHost != attrs["monitoring_host"] || server.MonitoringPort == nil || fmt.Sprint(*server.MonitoringPort) != attrs["monitoring_port"] || server.ExecutionCommand == nil || *server.ExecutionCommand != attrs["execution_command"] {
+							return fmt.Errorf("managed settings differ between Terraform and Crafty")
+						}
 						return nil
 					}
 				}
@@ -124,6 +134,22 @@ resource "crafty_minecraft_server" "test" {
 			},
 		)
 	}
+	initial := `auto_start = true
+ monitoring_host = "127.0.0.2"
+ monitoring_port = 25566
+ execution_command = "java -Xms1500M -Xmx2500M -jar paper.jar nogui"`
+	updatedSettings := `auto_start = false
+ monitoring_host = "127.0.0.3"
+ monitoring_port = 25567
+ execution_command = "java -Xms2000M -Xmx3000M -jar paper.jar nogui"`
+	updatePlan := resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction("crafty_minecraft_server.test", plancheck.ResourceActionUpdate)}}
+	emptyPlan := resource.ConfigPlanChecks{PostApplyPreRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}
+	settingsCheck := resource.ComposeTestCheckFunc(check(renamed),
+		resource.TestCheckResourceAttr("crafty_minecraft_server.test", "auto_start", "false"),
+		resource.TestCheckResourceAttr("crafty_minecraft_server.test", "monitoring_host", "127.0.0.3"),
+		resource.TestCheckResourceAttr("crafty_minecraft_server.test", "monitoring_port", "25567"),
+		resource.TestCheckResourceAttr("crafty_minecraft_server.test", "execution_command", "java -Xms2000M -Xmx3000M -jar paper.jar nogui"))
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){"crafty": providerserver.NewProtocol6WithError(New("test")())},
 		PreCheck: func() {
@@ -142,10 +168,35 @@ resource "crafty_minecraft_server" "test" {
 			return waitForServerDeletion(ctx, api, id)
 		},
 		Steps: []resource.TestStep{
-			{Config: config(name), Check: check(name)},
+			{Config: config(name, initial), Check: resource.ComposeTestCheckFunc(check(name), resource.TestCheckResourceAttr("crafty_minecraft_server.test", "auto_start", "true"), resource.TestCheckResourceAttr("crafty_minecraft_server.test", "monitoring_port", "25566"))},
 			{RefreshState: true, Check: check(name)},
-			{Config: config(renamed), Check: check(renamed), ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction("crafty_minecraft_server.test", plancheck.ResourceActionUpdate)}}},
-			{Config: config(renamed), PlanOnly: true, ConfigPlanChecks: resource.ConfigPlanChecks{PostApplyPreRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			{Config: config(renamed, initial), Check: check(renamed), ConfigPlanChecks: updatePlan},
+			{Config: config(renamed, updatedSettings), Check: settingsCheck, ConfigPlanChecks: updatePlan},
+			{RefreshState: true, Check: settingsCheck},
+			{Config: config(renamed, updatedSettings), PlanOnly: true, ConfigPlanChecks: emptyPlan},
+			{PreConfig: func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				drift := true
+				port := int64(25568)
+				if err := api.UpdateServer(ctx, id, client.UpdateServerRequest{AutoStart: &drift, MonitoringPort: &port}); err != nil {
+					t.Fatal(err)
+				}
+			}, Config: config(renamed, updatedSettings), Check: settingsCheck, ConfigPlanChecks: updatePlan},
+			{Config: config(renamed), Check: settingsCheck},
+			{Config: config(renamed), PlanOnly: true, ConfigPlanChecks: emptyPlan},
+			{PreConfig: func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				unmanaged := true
+				port := int64(25568)
+				if err := api.UpdateServer(ctx, id, client.UpdateServerRequest{AutoStart: &unmanaged, MonitoringPort: &port}); err != nil {
+					t.Fatal(err)
+				}
+			}, Config: config(renamed), PlanOnly: true, ConfigPlanChecks: emptyPlan},
+			{Config: config(renamed), Check: resource.ComposeTestCheckFunc(check(renamed), resource.TestCheckResourceAttr("crafty_minecraft_server.test", "auto_start", "true"), resource.TestCheckResourceAttr("crafty_minecraft_server.test", "monitoring_port", "25568"))},
+			{ResourceName: "crafty_minecraft_server.test", ImportState: true, ExpectError: regexp.MustCompile("Import unavailable for the verified API")},
+			{Config: config(renamed), PlanOnly: true, ConfigPlanChecks: emptyPlan},
 		},
 	}) // resource.Test always runs Terraform destroy and CheckDestroy at the end.
 }
