@@ -121,7 +121,7 @@ A real Crafty development environment is available in `dev/compose.yml`. Start i
 make test vet build
 ```
 
-Unit tests use local HTTP servers and do not require Crafty credentials. For a live smoke test, apply the example to a disposable Crafty instance, change `name`, verify the PATCH update, run another plan to check convergence, and finally run `terraform destroy`. Terraform state may contain sensitive data; keep it out of version control.
+Unit tests use local HTTP servers and do not require Crafty credentials. For automated live acceptance tests, run `make test-acc` with `CRAFTY_TOKEN` set; see [the local test guide](dev/README.md#automated-acceptance-tests). For a manual live smoke test, apply the example to a disposable Crafty instance, change `name`, verify the PATCH update, run another plan to check convergence, and finally run `terraform destroy`. Terraform state may contain sensitive data; keep it out of version control.
 
 ## Code quality and continuous integration
 
