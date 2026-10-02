@@ -5,7 +5,7 @@ description: "Manage a Minecraft Java server downloaded by Crafty."
 
 # crafty_minecraft_server
 
-Creates a Minecraft Java server using Crafty's `download_jar` operation. Bedrock servers and importing existing servers are not supported.
+Creates a Minecraft Java server using Crafty's `download_jar` operation. Bedrock creation is not supported. ID-only import is unavailable for the verified API; see the import limitations below.
 
 ```hcl
 resource "crafty_minecraft_server" "example" {
@@ -16,6 +16,12 @@ resource "crafty_minecraft_server" "example" {
   mem_max = 2
   host    = "127.0.0.1"
   port    = 25565
+
+  # Optional settings managed without replacement:
+  auto_start        = false
+  monitoring_host   = "127.0.0.1"
+  monitoring_port   = 25566
+  execution_command = "java -Xms1500M -Xmx2500M -jar paper.jar nogui"
 
   timeouts {
     create = "15m"
@@ -38,7 +44,10 @@ resource "crafty_minecraft_server" "example" {
 | `host` | String | Yes | Monitoring host reachable from Crafty; changes replace the server. |
 | `port` | Int64 | Yes | Monitoring and server.properties port, from 1 to 65535; changes replace the server. |
 | `id` | String | Computed | Crafty server identifier. |
-| `auto_start` | Boolean | Computed | Automatic-start setting; read-only. |
+| `auto_start` | Boolean | Optional + computed | Mutable automatic-start setting; explicit `false` is managed. |
+| `monitoring_host` | String | Optional + computed | Mutable monitoring address; initially uses `host` when omitted. |
+| `monitoring_port` | Int64 | Optional + computed | Mutable monitoring port, 1–65535; does not change server.properties. |
+| `execution_command` | String | Optional + computed | Mutable non-blank launch command; overrides generated JVM flags. |
 
 Verified Crafty 4.10.4 `download_jar` converts memory input `1/2` into JVM flags `-Xms1000M -Xmx2000M`; these inputs are not exact GiB. The provider accepts whole integer units. Names need at least two characters and may not contain slashes, backslashes, or `#`. Paper 1.21.1 is the tested engine/version pair. See the [API contract](../api-contract.md) for evidence and the supported-version table.
 
@@ -46,9 +55,48 @@ Verified Crafty 4.10.4 `download_jar` converts memory input `1/2` into JVM flags
 
 Creation uses POST `/api/v2/servers`; reads use GET `/api/v2/servers`; updates and deletion use PATCH and DELETE `/api/v2/servers/{serverID}`. Both GET endpoints return server objects in 4.10.4. The single-GET specification wrongly describes a role; the provider uses the collection because single GET returns ambiguous HTTP 400 `NOT_AUTHORIZED` after deletion.
 
-This provider supports only rename as an in-place update, while the real PATCH also accepts additional configuration fields. Other creation inputs are retained in Terraform state; GET does not reconstruct the complete original download payload, although it returns the execution command and current monitoring fields. Drift detection covers the name and computed automatic-start setting. An established server missing from three consecutive successful list responses is removed from state. A server with a pending post-create/update refresh remains in state until its metadata can be read. DELETE 404 is treated as already deleted; a collection GET 404 remains an error.
+Name, automatic start, monitoring address/port, and execution command are updated in place. Other creation inputs are retained in Terraform state; GET does not reconstruct the complete original download payload, although it returns the execution command and current monitoring fields. GET refreshes all five mutable fields. Explicit optional settings are reconciled on apply; omitted settings adopt Crafty values. An established server missing from three consecutive successful list responses is removed from state. A server with a pending post-create/update refresh remains in state until its metadata can be read. DELETE 404 is treated as already deleted; a collection GET 404 remains an error.
 
 In verified 4.10.4, default DELETE removes the panel record and preserves world files. Replacement creates a new directory and does not reuse the old world. Back up server data, review plans, and clean up retained directories separately.
+
+## Mutable settings and creation inputs
+
+`host` and `port` remain creation inputs and require replacement; `port` initially
+sets both monitoring and the generated `server.properties` port. Use
+`monitoring_host` and `monitoring_port` to update monitoring without replacing a
+server. Crafty PATCH does not edit `server.properties`; users must keep actual
+Minecraft networking consistent separately.
+
+`execution_command` is the complete launch command, rather than a RAM editor.
+Explicit values take precedence over the command generated from `mem_min` and
+`mem_max`, and are stored exactly without parsing or rewriting shell arguments.
+The original engine/version/memory inputs remain in state and still require
+replacement when changed. Supply a command valid for the actual executable;
+Terraform does not run, restart, or validate a Minecraft process.
+
+Omitting an optional setting means observing the panel value. Removing it from
+configuration stops enforcing it and preserves the value returned by GET; it does
+not reset Crafty defaults. A rename does not rewrite omitted settings. Existing
+configurations that omit the new fields continue to observe generated settings.
+Enabling `auto_start` changes Crafty's startup policy; review that policy before
+restarting the panel. Restricted-token PATCH permissions remain unverified.
+
+## Import
+
+`terraform import crafty_minecraft_server.example SERVER_ID` returns
+`Import unavailable for the verified API` and performs no mutation. Crafty 4.10.4
+GET cannot reliably reconstruct all required creation inputs: engine, Minecraft
+version, original memory inputs, and the `server.properties` port. `type` identifies
+Java, while executable names, update URLs, and arbitrary execution commands are
+not authoritative original download metadata. Current monitoring port is distinct
+from the file port. The provider does not guess or fabricate these values, and
+does not provide a composite identifier populated with unverified metadata.
+
+The live acceptance suite tests this diagnostic against a resource it creates,
+then verifies the original resource still has an empty plan and destroys it.
+Supporting import requires a reviewed way to recover those inputs, or a separate
+resource model that manages existing server configuration without requiring
+creation-only metadata.
 
 ## Timeouts and recovery
 
@@ -63,19 +111,23 @@ responses, transport timeouts, interrupted connections, and temporary DNS failur
 use exponential delays from 1 to 10 seconds. A larger `Retry-After` is respected
 without extending the operation deadline. Authentication errors, collection 404,
 malformed JSON, and unsuccessful application statuses are not retried.
-During preparation, incomplete metadata and an unconverged name are polled too.
+During preparation, incomplete metadata and unconverged settings are polled too.
 
 Creation saves `new_server_id` and a private pending-refresh marker before its
-follow-up GET. A successful refresh clears the marker. If refresh times out or
+follow-up GET. Once metadata is visible, explicit optional settings are applied in
+one PATCH. Omitted settings use the generated/current values. Complete convergence
+clears the marker. An initial PATCH failure also returns a warning and preserves
+the ID; a subsequent plan reads actual values, and apply retries configuration
+without recreating the server. If refresh times out or
 fails after an ID was returned, apply reports a warning and preserves identity
 without tainting the resource. Later plans resume the read and retain the ID while
 visibility is unresolved. Inspect Crafty and rerun `terraform plan` after recovery.
 A resource that never becomes visible requires investigation; it is not automatically
 replaced merely because a pending read timed out. The check confirms complete API
-metadata and the requested name, not Minecraft startup or download success.
+metadata and requested settings, not Minecraft startup or download success.
 
-An accepted rename similarly saves the applied name and the existing computed
-values before polling. An accepted delete polls for absence; a failed verification
+An accepted configuration PATCH similarly saves desired settings and existing
+computed values before polling all changed fields for convergence. An accepted delete polls for absence; a failed verification
 returns an error while preserving identity for a later destroy. DELETE 404 remains
 idempotent. Established-resource reads retain state on API errors and require three
 consecutive successful absences before removing state.

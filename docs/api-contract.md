@@ -33,7 +33,7 @@ instead of fetching a changing specification during CI. The upstream source tag 
 | Collection GET | Array of `Server` objects | Array with string `server_id`/`server_name` and boolean `auto_start` | Refresh name and `auto_start` by ID |
 | Single GET | Schema mistakenly lists `role_id`/`role_name` | A server object, with the same basic fields plus a `status` object | Keep collection reads; do not infer deletion from ambiguous single-GET errors |
 | Missing single GET | Not-found semantics unspecified | HTTP **400** with `NOT_AUTHORIZED` after deletion | Do not classify HTTP 400 as not found; it can also mean insufficient access |
-| PATCH | Only `server_name` documented | Name, `auto_start`, `server_ip`, `server_port`, and `execution_command` persisted in probes | Only rename is exposed as an in-place Terraform update |
+| PATCH | Only `server_name` documented | Name, `auto_start`, `server_ip`, `server_port`, and `execution_command` persisted in probes | All five verified fields are exposed as in-place updates |
 | Name validation | No documented minimum or exclusion pattern | At least two characters; `/`, `\`, and `#` rejected | Validate these constraints before mutation |
 | DELETE | `StatusOK`; no `files` parameter documented | Default deletes panel record and preserves directory; `?files=true` removes directory | Default DELETE, without `files=true`; retained files need separate cleanup |
 
@@ -72,8 +72,9 @@ Memory appears in `execution_command`; current monitoring configuration appears
 in `server_ip` and `server_port`. Neither reconstructs the complete original
 creation payload or the separate `server.properties` port.
 
-The provider currently detects drift only for name and `auto_start`. Other
-creation inputs remain in state by design; their retention is not a claim that
+The provider refreshes name, `auto_start`, monitoring address/port, and execution
+command. Explicit optional settings are reconciled on apply; omitted settings are
+observed. Other creation inputs remain in state by design; their retention is not a claim that
 GET cannot return monitoring settings. The client tolerates extra response fields
 and distinguishes a missing boolean from a valid `false` value.
 
@@ -90,10 +91,17 @@ by these probes.
 
 Changing `server_port` updates monitoring while leaving the generated
 `server.properties` unchanged. Updating an arbitrary execution command is not an
-equivalent, engine-independent update of the download inputs. The provider therefore
-continues to expose only rename as mutable, keeps `auto_start` read-only, and
-requires replacement for RAM, engine, version, host, and port. This is a deliberate
-provider scope, not an asserted restriction of the Crafty API.
+equivalent, engine-independent update of the download inputs. The provider exposes
+name, optional `auto_start`, `monitoring_host`,
+`monitoring_port`, and `execution_command` as mutable fields. Original RAM, engine,
+version, host, and port inputs still require replacement. Explicit launch commands
+override generated RAM flags without changing stored creation inputs. This is a
+deliberate provider scope, not an asserted restriction of the Crafty API.
+
+ID-only import remains unavailable because the verified GET fields do not reliably
+reconstruct the required original download payload. The Terraform acceptance suite
+tests the explicit diagnostic without changing the created server. See the
+[resource import limitations](resources/minecraft_server.md#import).
 
 ### Deletion
 
@@ -128,6 +136,7 @@ instance; the container/file contract probes belong to `make test-acc-ci`.
 
 To certify another version, start a fresh official image, verify its runtime
 version, compare its schemas and observed responses with the recorded specification,
-run all probes and Terraform scenarios, and review the resulting differences.
+run all probes and Terraform scenarios (including mutable settings, drift, import
+rejection, and post-create settings failure recovery), and review the resulting differences.
 Update the fixtures, version guard, support table, and CI pin together. An image
 starting successfully is not sufficient evidence of API compatibility.

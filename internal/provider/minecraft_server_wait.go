@@ -11,12 +11,12 @@ import (
 
 const pendingRefreshKey = "pending_refresh"
 
-var errIncompleteServer = errors.New("server response is missing server_name or auto_start")
+var errIncompleteServer = errors.New("server response is missing required name, automatic-start, monitoring, or execution-command fields")
 
 // waitRefresh only repeats GET requests. Three consecutive successful absences
 // confirm removal of an established resource; a newly created/pending resource
 // stays in state until it becomes visible or the operation times out.
-func (s *serverResource) waitRefresh(ctx context.Context, m *serverModel, pending bool, expectedName string) (bool, error) {
+func (s *serverResource) waitRefresh(ctx context.Context, m *serverModel, pending bool, expected *client.UpdateServerRequest) (bool, error) {
 	delay := s.pollInterval
 	if delay <= 0 {
 		delay = time.Second
@@ -29,7 +29,7 @@ func (s *serverResource) waitRefresh(ctx context.Context, m *serverModel, pendin
 		}
 		candidate := *m
 		found, err := s.refresh(ctx, &candidate)
-		if err == nil && found && (expectedName == "" || candidate.Name.ValueString() == expectedName) {
+		if err == nil && found && candidate.matchesPatch(expected) {
 			*m = candidate
 			return true, nil
 		}
@@ -47,7 +47,7 @@ func (s *serverResource) waitRefresh(ctx context.Context, m *serverModel, pendin
 			observation = fmt.Errorf("server is not yet visible in the collection")
 		} else {
 			missing = 0
-			observation = fmt.Errorf("server name has not converged to the requested value")
+			observation = fmt.Errorf("server settings have not converged to the requested values")
 		}
 		wait := delay
 		var api *client.APIError
