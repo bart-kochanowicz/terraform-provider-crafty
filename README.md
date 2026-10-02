@@ -43,6 +43,10 @@ The API client has no Terraform dependencies. The provider converts Terraform va
 - Crafty Controller 4.10.4 (verified baseline) with a trusted TLS certificate and an API token with server creation, access, and configuration permissions.
 - A supported engine/version pair available in Crafty's download catalog.
 
+## Install a release
+
+For prebuilt Linux, macOS and Windows binaries, checksum verification, and Terraform initialization, follow [the v0.1.0 installation guide](docs/releasing.md). Assets are published by the tag workflow. GitHub Releases and Terraform Registry publication are separate steps.
+
 ## Build and local installation
 
 ```sh

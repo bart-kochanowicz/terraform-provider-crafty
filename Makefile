@@ -60,3 +60,18 @@ test-acc: dev-up
 .PHONY: test-acc-ci
 test-acc-ci:
 	TF_ACC_TERRAFORM_PATH="$$(command -v "$(TERRAFORM)")" GO="$(GO)" python3 dev/ci.py run
+
+# Tools run at pinned versions without changing the provider's module dependencies.
+# Allow tool-specific Go requirements even when CI sets GOTOOLCHAIN=local.
+TFPLUGINDOCS_VERSION := v0.25.0
+GORELEASER_VERSION := v2.15.0
+.PHONY: docs docs-check release-check release-snapshot
+docs:
+	GOTOOLCHAIN=auto $(GO) run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@$(TFPLUGINDOCS_VERSION) generate --provider-name crafty
+docs-check: docs
+	git diff --exit-code -- docs
+	@test -z "$$(git ls-files --others --exclude-standard docs)" || { echo "Generated documentation is untracked."; exit 1; }
+release-check:
+	GOTOOLCHAIN=auto $(GO) run github.com/goreleaser/goreleaser/v2@$(GORELEASER_VERSION) check
+release-snapshot: release-check
+	GOTOOLCHAIN=auto $(GO) run github.com/goreleaser/goreleaser/v2@$(GORELEASER_VERSION) release --snapshot --clean
