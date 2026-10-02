@@ -124,7 +124,9 @@ fail the job. Passwords and tokens are masked in GitHub logs; the acceptance log
 and diagnostic files are also redacted before being saved.
 
 The test uses the same create, refresh, rename, empty-plan, and destroy suite as
-`make test-acc`. A failure uploads an artifact with the acceptance output (if the
+`make test-acc`. A second Terraform acceptance scenario uses a controlled HTTP
+server to verify recovery after post-create/update failures, preserved private
+state, no taint, no duplicate POST, and empty plans after API recovery. A failure uploads an artifact with the acceptance output (if the
 tests started), container logs, Compose status, and Crafty application logs. Artifacts
 are retained for seven days. Database files, credentials, and Terraform state are
 excluded. The final cleanup step runs even after failures and removes only that

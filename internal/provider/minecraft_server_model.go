@@ -3,21 +3,23 @@ package provider
 import (
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/bart-kochanowicz/terraform-provider-crafty/internal/client"
 )
 
 type serverModel struct {
-	ID        types.String `tfsdk:"id"`
-	Name      types.String `tfsdk:"name"`
-	Engine    types.String `tfsdk:"engine"`
-	Version   types.String `tfsdk:"version"`
-	MemMin    types.Int64  `tfsdk:"mem_min"`
-	MemMax    types.Int64  `tfsdk:"mem_max"`
-	Host      types.String `tfsdk:"host"`
-	Port      types.Int64  `tfsdk:"port"`
-	AutoStart types.Bool   `tfsdk:"auto_start"`
+	Timeouts  timeouts.Value `tfsdk:"timeouts"`
+	ID        types.String   `tfsdk:"id"`
+	Name      types.String   `tfsdk:"name"`
+	Engine    types.String   `tfsdk:"engine"`
+	Version   types.String   `tfsdk:"version"`
+	MemMin    types.Int64    `tfsdk:"mem_min"`
+	MemMax    types.Int64    `tfsdk:"mem_max"`
+	Host      types.String   `tfsdk:"host"`
+	Port      types.Int64    `tfsdk:"port"`
+	AutoStart types.Bool     `tfsdk:"auto_start"`
 }
 
 func (m serverModel) validate() error {

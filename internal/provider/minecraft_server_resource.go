@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/bart-kochanowicz/terraform-provider-crafty/internal/client"
 
@@ -13,7 +14,10 @@ import (
 var _ resource.Resource = (*serverResource)(nil)
 var _ resource.ResourceWithConfigure = (*serverResource)(nil)
 
-type serverResource struct{ client *client.Client }
+type serverResource struct {
+	client       *client.Client
+	pollInterval time.Duration
+}
 
 func (s *serverResource) Metadata(_ context.Context, req resource.MetadataRequest, r *resource.MetadataResponse) {
 	r.TypeName = req.ProviderTypeName + "_minecraft_server"
@@ -39,9 +43,16 @@ func (s *serverResource) Create(ctx context.Context, req resource.CreateRequest,
 		r.Diagnostics.AddError("Invalid server configuration", err.Error())
 		return
 	}
-	created, err := s.client.CreateJavaServer(ctx, m.createRequest())
+	duration, diags := m.Timeouts.Create(ctx, 10*time.Minute)
+	r.Diagnostics.Append(diags...)
+	if r.Diagnostics.HasError() {
+		return
+	}
+	opCtx, cancel := context.WithTimeout(ctx, duration)
+	defer cancel()
+	created, err := s.client.CreateJavaServer(opCtx, m.createRequest())
 	if err != nil {
-		r.Diagnostics.AddError("Unable to create Minecraft server", err.Error())
+		r.Diagnostics.AddError("Unable to create Minecraft server", err.Error()+" The POST request was not retried. Its outcome may be uncertain; inspect Crafty before applying again.")
 		return
 	}
 	if created.ID == "" {
@@ -50,18 +61,23 @@ func (s *serverResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 	m.ID = types.StringValue(created.ID)
 	m.AutoStart = types.BoolNull()
-	// Persist the ID before refreshing so a refresh failure does not orphan the server.
+	// Persist identity and a private preparation marker before any further HTTP call.
 	r.Diagnostics.Append(r.State.Set(ctx, &m)...)
-	found, err := s.refresh(ctx, &m)
+	if r.Private != nil {
+		r.Diagnostics.Append(r.Private.SetKey(ctx, pendingRefreshKey, []byte("true"))...)
+	}
+	if r.Diagnostics.HasError() {
+		return
+	}
+	_, err = s.waitRefresh(opCtx, &m, true, m.Name.ValueString())
 	if err != nil {
-		r.Diagnostics.AddError("Unable to read created server", err.Error())
-		return
-	}
-	if !found {
-		r.Diagnostics.AddError("Created server not visible", "The server ID is saved. Run terraform refresh after Crafty finishes preparing the server.")
+		r.Diagnostics.AddWarning("Created server refresh pending", fmt.Sprintf("Crafty returned server ID %s, which is saved in state. %s Run terraform plan again after preparation or API recovery; do not replace the server just to retry its read.", created.ID, err))
 		return
 	}
 	r.Diagnostics.Append(r.State.Set(ctx, &m)...)
+	if r.Private != nil {
+		r.Diagnostics.Append(r.Private.SetKey(ctx, pendingRefreshKey, nil)...)
+	}
 }
 
 // The single-server GET schema incorrectly describes a role. The documented
@@ -74,7 +90,7 @@ func (s *serverResource) refresh(ctx context.Context, m *serverModel) (bool, err
 	for _, remote := range servers {
 		if remote.ID == m.ID.ValueString() {
 			if remote.Name == nil || remote.AutoStart == nil {
-				return false, fmt.Errorf("server response is missing server_name or auto_start")
+				return false, errIncompleteServer
 			}
 			m.Name = types.StringValue(*remote.Name)
 			m.AutoStart = types.BoolValue(*remote.AutoStart)
@@ -90,9 +106,23 @@ func (s *serverResource) Read(ctx context.Context, req resource.ReadRequest, r *
 	if r.Diagnostics.HasError() {
 		return
 	}
-	found, err := s.refresh(ctx, &m)
+	duration, diags := m.Timeouts.Read(ctx, 2*time.Minute)
+	r.Diagnostics.Append(diags...)
+	marker, diags := req.Private.GetKey(ctx, pendingRefreshKey)
+	r.Diagnostics.Append(diags...)
+	if r.Diagnostics.HasError() {
+		return
+	}
+	pending := string(marker) == "true"
+	opCtx, cancel := context.WithTimeout(ctx, duration)
+	defer cancel()
+	found, err := s.waitRefresh(opCtx, &m, pending, "")
 	if err != nil {
-		r.Diagnostics.AddError("Unable to read Minecraft server", err.Error())
+		if pending {
+			r.Diagnostics.AddWarning("Server refresh pending", fmt.Sprintf("Server ID %s remains in state. %s Run terraform plan again after preparation or API recovery.", m.ID.ValueString(), err))
+		} else {
+			r.Diagnostics.AddError("Unable to read Minecraft server", err.Error())
+		}
 		return
 	}
 	if !found {
@@ -100,6 +130,9 @@ func (s *serverResource) Read(ctx context.Context, req resource.ReadRequest, r *
 		return
 	}
 	r.Diagnostics.Append(r.State.Set(ctx, &m)...)
+	if r.Private != nil {
+		r.Diagnostics.Append(r.Private.SetKey(ctx, pendingRefreshKey, nil)...)
+	}
 }
 func (s *serverResource) Update(ctx context.Context, req resource.UpdateRequest, r *resource.UpdateResponse) {
 	var m serverModel
@@ -111,20 +144,37 @@ func (s *serverResource) Update(ctx context.Context, req resource.UpdateRequest,
 		r.Diagnostics.AddError("Invalid server configuration", err.Error())
 		return
 	}
-	if err := s.client.UpdateServer(ctx, m.ID.ValueString(), client.UpdateServerRequest{Name: m.Name.ValueString()}); err != nil {
+	duration, diags := m.Timeouts.Update(ctx, 5*time.Minute)
+	r.Diagnostics.Append(diags...)
+	var prior serverModel
+	r.Diagnostics.Append(req.State.Get(ctx, &prior)...)
+	if r.Diagnostics.HasError() {
+		return
+	}
+	opCtx, cancel := context.WithTimeout(ctx, duration)
+	defer cancel()
+	if err := s.client.UpdateServer(opCtx, m.ID.ValueString(), client.UpdateServerRequest{Name: m.Name.ValueString()}); err != nil {
 		r.Diagnostics.AddError("Unable to update Minecraft server", err.Error())
 		return
 	}
-	found, err := s.refresh(ctx, &m)
-	if err != nil {
-		r.Diagnostics.AddError("Unable to read updated server", err.Error())
+	// Preserve the applied name and known computed values if the follow-up read fails.
+	m.AutoStart = prior.AutoStart
+	r.Diagnostics.Append(r.State.Set(ctx, &m)...)
+	if r.Private != nil {
+		r.Diagnostics.Append(r.Private.SetKey(ctx, pendingRefreshKey, []byte("true"))...)
+	}
+	if r.Diagnostics.HasError() {
 		return
 	}
-	if !found {
-		r.Diagnostics.AddError("Updated server not visible", "Crafty no longer lists the server. Run terraform plan to reconcile state.")
+	_, err := s.waitRefresh(opCtx, &m, true, m.Name.ValueString())
+	if err != nil {
+		r.Diagnostics.AddWarning("Updated server refresh pending", fmt.Sprintf("Crafty accepted the rename of server %s, which is saved in state. %s Run terraform plan again after API recovery.", m.ID.ValueString(), err))
 		return
 	}
 	r.Diagnostics.Append(r.State.Set(ctx, &m)...)
+	if r.Private != nil {
+		r.Diagnostics.Append(r.Private.SetKey(ctx, pendingRefreshKey, nil)...)
+	}
 }
 func (s *serverResource) Delete(ctx context.Context, req resource.DeleteRequest, r *resource.DeleteResponse) {
 	var m serverModel
@@ -132,12 +182,23 @@ func (s *serverResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	if r.Diagnostics.HasError() {
 		return
 	}
-	err := s.client.DeleteServer(ctx, m.ID.ValueString())
+	duration, diags := m.Timeouts.Delete(ctx, 5*time.Minute)
+	r.Diagnostics.Append(diags...)
+	if r.Diagnostics.HasError() {
+		return
+	}
+	opCtx, cancel := context.WithTimeout(ctx, duration)
+	defer cancel()
+	err := s.client.DeleteServer(opCtx, m.ID.ValueString())
 	if client.IsNotFound(err) {
 		return
 	}
 	if err != nil {
 		r.Diagnostics.AddError("Unable to delete Minecraft server", err.Error())
+		return
+	}
+	if err := s.waitDeleted(opCtx, &m); err != nil {
+		r.Diagnostics.AddError("Unable to confirm server deletion", err.Error())
 	}
 }
 
@@ -148,6 +209,16 @@ func (s *serverResource) ValidateConfig(ctx context.Context, req resource.Valida
 	r.Diagnostics.Append(req.Config.Get(ctx, &m)...)
 	if r.Diagnostics.HasError() {
 		return
+	}
+	for name, value := range m.Timeouts.Attributes() {
+		if value.IsNull() || value.IsUnknown() {
+			continue
+		}
+		text := value.(types.String).ValueString()
+		duration, err := time.ParseDuration(text)
+		if err != nil || duration <= 0 {
+			r.Diagnostics.AddError("Invalid operation timeout", fmt.Sprintf("timeouts.%s must be a positive duration, such as 30s or 10m.", name))
+		}
 	}
 	for _, v := range []types.String{m.Name, m.Engine, m.Version, m.Host} {
 		if !v.IsNull() && !v.IsUnknown() && v.ValueString() == "" {
