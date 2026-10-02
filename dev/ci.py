@@ -11,6 +11,8 @@ import sys
 import urllib.error
 import urllib.request
 
+from api_contract import verify_contract
+
 ROOT = Path(__file__).resolve().parent.parent
 JWT = re.compile(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+")
 
@@ -92,6 +94,7 @@ class Integration:
         token = self.token()
         # Authenticate with the newly issued API key before starting Terraform.
         self.api("GET", "servers", token=token)
+        verify_contract(self, token)
         env = os.environ.copy()
         env.update(CRAFTY_TOKEN=token, CRAFTY_URL="http://127.0.0.1:18001", TF_ACC="1")
         env.pop("TF_CLI_CONFIG_FILE", None)

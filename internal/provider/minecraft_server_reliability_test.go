@@ -394,3 +394,25 @@ func TestCreateDoesNotReplayAmbiguousResponse(t *testing.T) {
 		t.Fatalf("ambiguous POST was repeated: POST=%d %v", posts.Load(), response.Diagnostics)
 	}
 }
+
+func TestServerNameContractValidation(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		valid bool
+	}{{"x", false}, {"bad/name", false}, {"bad\\name", false}, {"bad#name", false}, {"🚀", false}, {"🚀🚀", true}, {"valid-name", true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			model := reliabilityModel()
+			model.Name = types.StringValue(tc.name)
+			if got := model.validate() == nil; got != tc.valid {
+				t.Fatalf("name accepted=%v, want %v", got, tc.valid)
+			}
+			s := &serverResource{}
+			state := reliabilityState(t, s, model)
+			response := resource.ValidateConfigResponse{}
+			s.ValidateConfig(context.Background(), resource.ValidateConfigRequest{Config: tfsdk.Config(state)}, &response)
+			if response.Diagnostics.HasError() == tc.valid {
+				t.Fatalf("configuration diagnostics disagree with API name constraint: %v", response.Diagnostics)
+			}
+		})
+	}
+}

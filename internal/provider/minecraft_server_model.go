@@ -2,6 +2,8 @@ package provider
 
 import (
 	"fmt"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -26,6 +28,9 @@ func (m serverModel) validate() error {
 	if m.Name.ValueString() == "" || m.Engine.ValueString() == "" || m.Version.ValueString() == "" || m.Host.ValueString() == "" {
 		return fmt.Errorf("name, engine, version, and host must not be empty")
 	}
+	if !validServerName(m.Name.ValueString()) {
+		return fmt.Errorf("name must contain at least two characters and must not contain slashes, backslashes, or #")
+	}
 	if m.MemMin.ValueInt64() < 1 || m.MemMax.ValueInt64() < m.MemMin.ValueInt64() {
 		return fmt.Errorf("memory values must satisfy 1 <= mem_min <= mem_max")
 	}
@@ -44,4 +49,9 @@ func (m serverModel) createRequest() client.CreateJavaServerRequest {
 			MemMin: m.MemMin.ValueInt64(), MemMax: m.MemMax.ValueInt64(), Port: m.Port.ValueInt64(),
 		}},
 	}
+}
+
+// Crafty 4.10.4 validates the same name constraints on create and PATCH.
+func validServerName(name string) bool {
+	return utf8.RuneCountInString(name) >= 2 && !strings.ContainsAny(name, "/\\#")
 }

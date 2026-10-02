@@ -80,8 +80,9 @@ func (s *serverResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 }
 
-// The single-server GET schema incorrectly describes a role. The documented
-// collection GET provides the Server schema and is used for authoritative reads.
+// Crafty 4.10.4 returns server objects from both GET endpoints. The provider
+// uses the collection to reconcile IDs; missing single GET returns ambiguous
+// HTTP 400 NOT_AUTHORIZED rather than a reliable not-found status.
 func (s *serverResource) refresh(ctx context.Context, m *serverModel) (bool, error) {
 	servers, err := s.client.ListServers(ctx)
 	if err != nil {
@@ -219,6 +220,9 @@ func (s *serverResource) ValidateConfig(ctx context.Context, req resource.Valida
 		if err != nil || duration <= 0 {
 			r.Diagnostics.AddError("Invalid operation timeout", fmt.Sprintf("timeouts.%s must be a positive duration, such as 30s or 10m.", name))
 		}
+	}
+	if !m.Name.IsNull() && !m.Name.IsUnknown() && !validServerName(m.Name.ValueString()) {
+		r.Diagnostics.AddError("Invalid server name", "Name must contain at least two characters and must not contain slashes, backslashes, or #.")
 	}
 	for _, v := range []types.String{m.Name, m.Engine, m.Version, m.Host} {
 		if !v.IsNull() && !v.IsUnknown() && v.ValueString() == "" {
