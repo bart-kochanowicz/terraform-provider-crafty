@@ -125,9 +125,10 @@ Unit tests use local HTTP servers and do not require Crafty credentials. For aut
 
 ## Code quality and continuous integration
 
-GitHub Actions runs `.github/workflows/ci.yml` for pull requests, pushes to `main` (including merges), merge queues, and manual dispatches. No Crafty instance or API secrets are required.
+GitHub Actions runs `.github/workflows/ci.yml` for pull requests, pushes to `main` (including merges), merge queues, and manual dispatches. The integration job starts a fresh Crafty instance and creates its API credentials automatically; no repository secrets or manual configuration are required.
 
 - **Lint** uses golangci-lint **v2.14.0** with `errcheck`, `govet`, `ineffassign`, `staticcheck`, and `unused`. It also checks `gofmt` and `goimports` formatting.
+- **Crafty acceptance tests** starts the Docker Compose stack, waits for readiness, bootstraps an API key, and runs the live Terraform lifecycle suite. Failures upload redacted diagnostics, and cleanup removes the disposable containers and volumes. See [the CI integration guide](dev/README.md#integration-tests-in-github-actions).
 - **Tests and build** checks dependency integrity and whether `go mod tidy` changes tracked module files, checks Go and Terraform formatting, runs uncached tests with the race detector, runs `go vet`, builds the provider, and validates the Terraform example with a development override.
 
 Install golangci-lint locally using Homebrew:
@@ -141,4 +142,4 @@ make check
 
 Use v2.14.0 for exact CI parity; see the [official installation instructions](https://golangci-lint.run/docs/welcome/install/local/) for version-specific binaries. `make fmt` updates Go import/formatting and Terraform examples. `make fmt-check` only checks formatting. `make lint` runs the configured analyzers and checks formatting. Override executable paths using `GO`, `GOLANGCI_LINT`, and `TERRAFORM` when needed.
 
-To prevent merging failing changes, configure a GitHub branch ruleset for `main` and require the **Lint** and **Tests and build** status checks after their first workflow run. The workflow alone runs checks but does not enforce branch protection.
+To prevent merging failing changes, configure a GitHub branch ruleset for `main` and require the **Lint**, **Tests and build**, and **Crafty acceptance tests** status checks after their first workflow run. The workflow alone runs checks but does not enforce branch protection.

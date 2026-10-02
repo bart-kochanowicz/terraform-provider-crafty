@@ -54,7 +54,11 @@ jobs:
           go mod tidy
           git diff --exit-code -- go.mod go.sum
       - name: Validate Docker Compose configuration
-        run: make dev-check
+        run: |
+          make dev-check
+          COMPOSE_PROJECT_NAME=crafty-provider-ci-validation docker compose -f dev/compose.yml -f dev/compose.ci.yml config --quiet
+      - name: Test CI isolation and credential handling
+        run: python3 -m unittest discover -s dev -p 'test_ci.py'
       - name: Check formatting
         run: make fmt-check
       - name: Test and build
@@ -73,3 +77,43 @@ jobs:
           EOF_CONFIG
           TF_CLI_CONFIG_FILE="$config" terraform -chdir=examples/local validate
           TF_CLI_CONFIG_FILE="$config" terraform -chdir=examples/docker validate
+
+  integration:
+    name: Crafty acceptance tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      COMPOSE_PROJECT_NAME: crafty-provider-ci-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.4
+          terraform_wrapper: false
+      - name: Start Crafty and wait for readiness
+        timeout-minutes: 15
+        run: python3 dev/ci.py up
+      - name: Bootstrap API credentials and run acceptance tests
+        timeout-minutes: 25
+        run: |
+          export TF_ACC_TERRAFORM_PATH="$(command -v terraform)"
+          python3 dev/ci.py test
+      - name: Collect failure diagnostics
+        if: failure()
+        run: python3 dev/ci.py logs
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crafty-integration-${{ github.run_id }}-${{ github.run_attempt }}
+          path: bin/ci-logs
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Remove containers and volumes
+        if: always()
+        run: python3 dev/ci.py down
