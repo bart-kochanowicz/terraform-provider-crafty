@@ -1,0 +1,7 @@
+# Requires Docker Compose 2.24.4+ for !override. Keep CI isolated from local data.
+services:
+  crafty:
+    ports: !override []
+  api:
+    ports: !override
+      - "127.0.0.1:18001:80"

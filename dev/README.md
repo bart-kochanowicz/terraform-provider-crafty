@@ -105,8 +105,44 @@ settings and port 25565, but is never started and its EULA is not accepted.
 Do not point these tests at a production instance. The token is passed through a
 sensitive Terraform input variable; avoid debug logging and keep test artifacts private.
 
-`make test` skips acceptance tests unless `TF_ACC=1` is explicitly set. GitHub
-Actions continues to run offline tests; it does not start Crafty or run this suite.
+`make test` skips acceptance tests unless `TF_ACC=1` is explicitly set.
+
+## Integration tests in GitHub Actions
+
+The **Crafty acceptance tests** job runs for pull requests (including forks), pushes
+to `main`, merge queues, and manual workflow dispatches. It uses the pinned Crafty
+image from `compose.yml` and the `compose.ci.yml` override. Each job has a unique
+`crafty-provider-ci-*` Compose project and fresh named volumes. The override removes
+Crafty's published ports and exposes only the loopback API bridge on port 18001.
+Docker Compose 2.24.4 or newer is required for `!override`.
+
+The job waits up to 600 seconds for Compose health checks, reads the generated
+administrator credentials inside the container, logs in through the API, and
+creates a full-access API key for that disposable instance. No GitHub secrets,
+preconfigured Crafty account, or manual login are required. Authentication failures
+fail the job. Passwords and tokens are masked in GitHub logs; the acceptance log
+and diagnostic files are also redacted before being saved.
+
+The test uses the same create, refresh, rename, empty-plan, and destroy suite as
+`make test-acc`. A failure uploads an artifact with the acceptance output (if the
+tests started), container logs, Compose status, and Crafty application logs. Artifacts
+are retained for seven days. Database files, credentials, and Terraform state are
+excluded. The final cleanup step runs even after failures and removes only that
+job's containers, network, and volumes. GitHub-hosted runners are discarded if a
+forced termination prevents the cleanup step from completing.
+
+To reproduce the automatic bootstrap and cleanup locally while keeping the normal
+development environment running:
+
+```sh
+COMPOSE_PROJECT_NAME="crafty-provider-ci-local-$(date +%s)" make test-acc-ci
+```
+
+This does not use `CRAFTY_TOKEN` from your shell. Port 18001 must be free. On failure,
+redacted diagnostics are saved under ignored `bin/ci-logs/`. For separate lifecycle
+steps, set the same `COMPOSE_PROJECT_NAME` and use `python3 dev/ci.py up`, `test`,
+`logs`, and `down`. The helper refuses project names outside `crafty-provider-ci-*`
+to protect the persistent local development volumes.
 
 ## Stop and preserve data
 

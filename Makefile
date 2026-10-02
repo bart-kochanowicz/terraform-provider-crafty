@@ -55,3 +55,8 @@ dev-provider: build
 test-acc: dev-up
 	@command -v "$(TERRAFORM)" >/dev/null
 	TF_ACC=1 TF_ACC_TERRAFORM_PATH="$$(command -v "$(TERRAFORM)")" $(GO) test -v -race -count=1 -timeout 30m ./internal/provider -run '^TestAcc'
+
+# Use a fresh crafty-provider-ci-* project; removes only that project's volumes.
+.PHONY: test-acc-ci
+test-acc-ci:
+	TF_ACC_TERRAFORM_PATH="$$(command -v "$(TERRAFORM)")" GO="$(GO)" python3 dev/ci.py run
