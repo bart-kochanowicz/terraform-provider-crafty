@@ -1,0 +1,5 @@
+{
+  "error": "INVALID_JSON_SCHEMA",
+  "error_data": " Additional Properties are not allowed to be passed ",
+  "status": "error"
+}

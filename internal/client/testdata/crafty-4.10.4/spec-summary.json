@@ -1,0 +1,46 @@
+{
+  "source_url": "https://docs.craftycontrol.com/pages/developer-guide/api-reference/openapi-spec.yml",
+  "retrieved_on": "2026-10-02",
+  "sha256": "bfadb88c5bba1996e2a5ffe6102f266ba257eae662470f6210896c16518dfb3b",
+  "openapi_version": "3.0.4",
+  "api_version": "2.0.1",
+  "server_fields": {
+    "server_id": "string",
+    "created": "string",
+    "server_uuid": "string",
+    "server_name": "string",
+    "path": "string",
+    "backup_path": "string",
+    "executable": "string",
+    "log_path": "string",
+    "execution_command": "string",
+    "auto_start": "boolean",
+    "auto_start_delay": "integer",
+    "crash_detection": "boolean",
+    "stop_command": "string",
+    "executable_update_url": "string",
+    "server_ip": "string",
+    "server_port": "integer",
+    "logs_delete_after": "integer",
+    "type": "string"
+  },
+  "download_fields": {
+    "category": "string",
+    "type": "string",
+    "version": "string",
+    "mem_min": "integer",
+    "mem_max": "integer",
+    "server_properties_port": "integer"
+  },
+  "memory_units_specified": false,
+  "single_get_fields": {
+    "role_id": "integer",
+    "created": "string",
+    "last_update": "string",
+    "role_name": "string"
+  },
+  "patch_fields": {
+    "server_name": "string"
+  },
+  "delete_files_parameter_documented": false
+}

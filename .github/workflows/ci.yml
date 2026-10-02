@@ -58,7 +58,7 @@ jobs:
           make dev-check
           COMPOSE_PROJECT_NAME=crafty-provider-ci-validation docker compose -f dev/compose.yml -f dev/compose.ci.yml config --quiet
       - name: Test CI isolation and credential handling
-        run: python3 -m unittest discover -s dev -p 'test_ci.py'
+        run: python3 -m unittest discover -s dev -p 'test_*.py'
       - name: Check formatting
         run: make fmt-check
       - name: Test and build
@@ -98,11 +98,19 @@ jobs:
       - name: Start Crafty and wait for readiness
         timeout-minutes: 15
         run: python3 dev/ci.py up
-      - name: Bootstrap API credentials and run acceptance tests
+      - name: Bootstrap credentials, verify API contract, and run acceptance tests
         timeout-minutes: 25
         run: |
           export TF_ACC_TERRAFORM_PATH="$(command -v terraform)"
           python3 dev/ci.py test
+      - name: Upload API contract report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crafty-api-contract-${{ github.run_id }}-${{ github.run_attempt }}
+          path: bin/ci-logs/api-contract.json
+          retention-days: 7
+          if-no-files-found: ignore
       - name: Collect failure diagnostics
         if: failure()
         run: python3 dev/ci.py logs

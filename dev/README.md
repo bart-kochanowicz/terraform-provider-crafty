@@ -49,7 +49,7 @@ terraform apply
 
 `make dev-provider` builds the provider and writes an ignored, project-local CLI configuration with a development override. Do not run `terraform init` with this override for this example. No global Terraform configuration is changed. The example defaults to the loopback API bridge; set `TF_VAR_crafty_url` to override it.
 
-The engine/version must be available in Crafty's download catalog. The example requests Paper 1.21.1, 1–2 GiB of Java memory, and port 25565. Allow several GiB of RAM for the container if you intend to run Minecraft. Server creation needs internet access to download the server executable.
+The engine/version must be available in Crafty's download catalog. The example requests Paper 1.21.1, Crafty memory inputs 1–2 (1000–2000 JVM MiB in 4.10.4), and port 25565. Allow several GiB of RAM for the container if you intend to run Minecraft. Server creation needs internet access to download the server executable.
 
 Verify the server appears in Crafty. Change the example's `name`, run `terraform plan` and `terraform apply`, then run another plan to verify convergence. Download-time changes replace the server. The provider does not start Minecraft or accept its EULA; complete required setup in Crafty before testing port 25565.
 
@@ -100,8 +100,8 @@ Optional environment variables:
 | `CRAFTY_TEST_ENGINE` | `paper` | Engine available in the download catalog |
 | `CRAFTY_TEST_VERSION` | `1.21.1` | Version available for that engine |
 
-Creation requires internet access from Crafty. The server uses 1–2 GiB memory
-settings and port 25565, but is never started and its EULA is not accepted.
+Creation requires internet access from Crafty. The server uses Crafty memory inputs 1–2
+(1000–2000 JVM MiB) and port 25565, but is never started and its EULA is not accepted.
 Do not point these tests at a production instance. The token is passed through a
 sensitive Terraform input variable; avoid debug logging and keep test artifacts private.
 
@@ -122,6 +122,13 @@ creates a full-access API key for that disposable instance. No GitHub secrets,
 preconfigured Crafty account, or manual login are required. Authentication failures
 fail the job. Passwords and tokens are masked in GitHub logs; the acceptance log
 and diagnostic files are also redacted before being saved.
+
+Before Terraform runs, `dev/api_contract.py` verifies the actual Crafty 4.10.4
+runtime version, RAM conversion, GET fields, PATCH capabilities and rejections,
+and DELETE file behavior against the [recorded contract](../docs/api-contract.md).
+A different image version fails the contract guard until its baseline is reviewed.
+The report `api-contract.json` is published for seven days on both success and
+failure and contains no credentials or server paths.
 
 The test uses the same create, refresh, rename, empty-plan, and destroy suite as
 `make test-acc`. A second Terraform acceptance scenario uses a controlled HTTP

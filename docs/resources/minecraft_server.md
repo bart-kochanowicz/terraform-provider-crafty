@@ -33,22 +33,22 @@ resource "crafty_minecraft_server" "example" {
 | `name` | String | Yes | Server name; supports in-place updates. |
 | `engine` | String | Yes | Crafty download engine identifier; changes replace the server. |
 | `version` | String | Yes | Supported Minecraft download version; changes replace the server. |
-| `mem_min` | Int64 | Yes | Minimum Java memory; at least 1. Changes replace the server. |
-| `mem_max` | Int64 | Yes | Maximum Java memory; at least `mem_min`. Changes replace the server. |
+| `mem_min` | Int64 | Yes | Minimum Java memory in Crafty units (1000 JVM MiB per unit); at least 1. Changes replace the server. |
+| `mem_max` | Int64 | Yes | Maximum Java memory in Crafty units (1000 JVM MiB per unit); at least `mem_min`. Changes replace the server. |
 | `host` | String | Yes | Monitoring host reachable from Crafty; changes replace the server. |
 | `port` | Int64 | Yes | Monitoring and server.properties port, from 1 to 65535; changes replace the server. |
 | `id` | String | Computed | Crafty server identifier. |
 | `auto_start` | Boolean | Computed | Automatic-start setting; read-only. |
 
-Memory follows Crafty's GiB convention; the supplied OpenAPI specification does not explicitly state units, so verify against your installed Crafty version. The engine and version must exist in the Crafty download catalog.
+Verified Crafty 4.10.4 `download_jar` converts memory input `1/2` into JVM flags `-Xms1000M -Xmx2000M`; these inputs are not exact GiB. The provider accepts whole integer units. Names need at least two characters and may not contain slashes, backslashes, or `#`. Paper 1.21.1 is the tested engine/version pair. See the [API contract](../api-contract.md) for evidence and the supported-version table.
 
 ## Lifecycle and limitations
 
-Creation uses POST `/api/v2/servers`; reads use GET `/api/v2/servers`; updates and deletion use PATCH and DELETE `/api/v2/servers/{serverID}`. The supplied single-server GET schema describes role fields, so reads locate the server in the documented collection response.
+Creation uses POST `/api/v2/servers`; reads use GET `/api/v2/servers`; updates and deletion use PATCH and DELETE `/api/v2/servers/{serverID}`. Both GET endpoints return server objects in 4.10.4. The single-GET specification wrongly describes a role; the provider uses the collection because single GET returns ambiguous HTTP 400 `NOT_AUTHORIZED` after deletion.
 
-The supplied PATCH schema only supports `server_name`. Download inputs are retained in Terraform state because they cannot be reconstructed from GET. Drift detection covers the name and computed automatic-start setting. An established server missing from three consecutive successful list responses is removed from state. A server with a pending post-create/update refresh remains in state until its metadata can be read. DELETE 404 is treated as already deleted; a collection GET 404 remains an error.
+This provider supports only rename as an in-place update, while the real PATCH also accepts additional configuration fields. Other creation inputs are retained in Terraform state; GET does not reconstruct the complete original download payload, although it returns the execution command and current monitoring fields. Drift detection covers the name and computed automatic-start setting. An established server missing from three consecutive successful list responses is removed from state. A server with a pending post-create/update refresh remains in state until its metadata can be read. DELETE 404 is treated as already deleted; a collection GET 404 remains an error.
 
-Replacement and deletion can remove world files. Back up server data and review the Terraform plan.
+In verified 4.10.4, default DELETE removes the panel record and preserves world files. Replacement creates a new directory and does not reuse the old world. Back up server data, review plans, and clean up retained directories separately.
 
 ## Timeouts and recovery
 

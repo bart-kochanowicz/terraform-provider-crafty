@@ -1,0 +1,20 @@
+{
+  "create_type": "minecraft_java",
+  "minecraft_java_create_data": {
+    "create_type": "download_jar",
+    "download_jar_create_data": {
+      "category": "mc_java_servers",
+      "mem_max": 2,
+      "mem_min": 1,
+      "server_properties_port": 25577,
+      "type": "paper",
+      "version": "1.21.1"
+    }
+  },
+  "minecraft_java_monitoring_data": {
+    "host": "127.0.0.1",
+    "port": 25576
+  },
+  "monitoring_type": "minecraft_java",
+  "name": "contract-test"
+}

@@ -1,6 +1,6 @@
 package client
 
-// CreateJavaServerRequest follows the OpenAPI Java server creation schema.
+// CreateJavaServerRequest follows the verified Crafty 4.10.4 Java download contract.
 type CreateJavaServerRequest struct {
 	Name           string         `json:"name"`
 	MonitoringType string         `json:"monitoring_type"`
@@ -22,6 +22,7 @@ type JavaCreateData struct {
 }
 
 // JavaDownload specifies the engine, version, memory, and server port.
+// Crafty 4.10.4 download_jar multiplies each memory input by 1000 for JVM M flags.
 type JavaDownload struct {
 	Category string `json:"category"`
 	Engine   string `json:"type"`
@@ -44,7 +45,8 @@ type Server struct {
 	AutoStart *bool   `json:"auto_start"`
 }
 
-// UpdateServerRequest contains the sole documented mutable server field.
+// UpdateServerRequest contains the name update supported by this provider.
+// Crafty 4.10.4 accepts additional configuration fields; see docs/api-contract.md.
 type UpdateServerRequest struct {
 	Name string `json:"server_name"`
 }
