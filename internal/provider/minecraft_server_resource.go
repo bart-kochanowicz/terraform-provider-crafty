@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/bart-kochanowicz/terraform-provider-crafty/internal/client"
@@ -60,7 +61,8 @@ func (s *serverResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 	m.ID = types.StringValue(created.ID)
-	m.AutoStart = types.BoolNull()
+	requested := m
+	m.adoptUnknownSettings(serverModel{})
 	// Persist identity and a private preparation marker before any further HTTP call.
 	r.Diagnostics.Append(r.State.Set(ctx, &m)...)
 	if r.Private != nil {
@@ -69,10 +71,32 @@ func (s *serverResource) Create(ctx context.Context, req resource.CreateRequest,
 	if r.Diagnostics.HasError() {
 		return
 	}
-	_, err = s.waitRefresh(opCtx, &m, true, m.Name.ValueString())
+	pending := func(cause error) {
+		r.Diagnostics.AddWarning("Created server configuration pending", fmt.Sprintf("Crafty returned server ID %s, which is saved in state. %s Run terraform plan and apply again after preparation or API recovery to reconcile the configured settings; do not replace the server to retry configuration.", created.ID, cause))
+	}
+	observed := m
+	_, err = s.waitRefresh(opCtx, &observed, true, &client.UpdateServerRequest{Name: m.Name.ValueString()})
 	if err != nil {
-		r.Diagnostics.AddWarning("Created server refresh pending", fmt.Sprintf("Crafty returned server ID %s, which is saved in state. %s Run terraform plan again after preparation or API recovery; do not replace the server just to retry its read.", created.ID, err))
+		pending(err)
 		return
+	}
+	m.adoptUnknownSettings(observed)
+	r.Diagnostics.Append(r.State.Set(ctx, &m)...)
+	if r.Diagnostics.HasError() {
+		return
+	}
+	patch := requested.settingsPatch(nil)
+	if !emptyPatch(patch) {
+		if err := s.client.UpdateServer(opCtx, m.ID.ValueString(), patch); err != nil {
+			pending(fmt.Errorf("initial settings PATCH failed and was not retried: %w", err))
+			return
+		}
+		patch.Name = m.Name.ValueString()
+		_, err = s.waitRefresh(opCtx, &m, true, &patch)
+		if err != nil {
+			pending(err)
+			return
+		}
 	}
 	r.Diagnostics.Append(r.State.Set(ctx, &m)...)
 	if r.Private != nil {
@@ -90,12 +114,15 @@ func (s *serverResource) refresh(ctx context.Context, m *serverModel) (bool, err
 	}
 	for _, remote := range servers {
 		if remote.ID == m.ID.ValueString() {
-			if remote.Name == nil || remote.AutoStart == nil {
+			if remote.Name == nil || remote.AutoStart == nil || remote.MonitoringHost == nil || remote.MonitoringPort == nil || remote.ExecutionCommand == nil {
 				return false, errIncompleteServer
 			}
 			m.Name = types.StringValue(*remote.Name)
 			m.AutoStart = types.BoolValue(*remote.AutoStart)
-			// Download inputs are not returned by the Server schema. Preserve state.
+			m.MonitoringHost = types.StringValue(*remote.MonitoringHost)
+			m.MonitoringPort = types.Int64Value(*remote.MonitoringPort)
+			m.ExecutionCommand = types.StringValue(*remote.ExecutionCommand)
+			// Preserve original download inputs; GET does not reconstruct their payload.
 			return true, nil
 		}
 	}
@@ -117,7 +144,7 @@ func (s *serverResource) Read(ctx context.Context, req resource.ReadRequest, r *
 	pending := string(marker) == "true"
 	opCtx, cancel := context.WithTimeout(ctx, duration)
 	defer cancel()
-	found, err := s.waitRefresh(opCtx, &m, pending, "")
+	found, err := s.waitRefresh(opCtx, &m, pending, nil)
 	if err != nil {
 		if pending {
 			r.Diagnostics.AddWarning("Server refresh pending", fmt.Sprintf("Server ID %s remains in state. %s Run terraform plan again after preparation or API recovery.", m.ID.ValueString(), err))
@@ -154,12 +181,17 @@ func (s *serverResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 	opCtx, cancel := context.WithTimeout(ctx, duration)
 	defer cancel()
-	if err := s.client.UpdateServer(opCtx, m.ID.ValueString(), client.UpdateServerRequest{Name: m.Name.ValueString()}); err != nil {
+	m.adoptUnknownSettings(prior)
+	patch := m.settingsPatch(&prior)
+	if emptyPatch(patch) {
+		r.Diagnostics.Append(r.State.Set(ctx, &m)...)
+		return
+	}
+	if err := s.client.UpdateServer(opCtx, m.ID.ValueString(), patch); err != nil {
 		r.Diagnostics.AddError("Unable to update Minecraft server", err.Error())
 		return
 	}
-	// Preserve the applied name and known computed values if the follow-up read fails.
-	m.AutoStart = prior.AutoStart
+	// Preserve accepted settings and all known computed values if the read fails.
 	r.Diagnostics.Append(r.State.Set(ctx, &m)...)
 	if r.Private != nil {
 		r.Diagnostics.Append(r.Private.SetKey(ctx, pendingRefreshKey, []byte("true"))...)
@@ -167,9 +199,9 @@ func (s *serverResource) Update(ctx context.Context, req resource.UpdateRequest,
 	if r.Diagnostics.HasError() {
 		return
 	}
-	_, err := s.waitRefresh(opCtx, &m, true, m.Name.ValueString())
+	_, err := s.waitRefresh(opCtx, &m, true, &patch)
 	if err != nil {
-		r.Diagnostics.AddWarning("Updated server refresh pending", fmt.Sprintf("Crafty accepted the rename of server %s, which is saved in state. %s Run terraform plan again after API recovery.", m.ID.ValueString(), err))
+		r.Diagnostics.AddWarning("Updated server refresh pending", fmt.Sprintf("Crafty accepted the configuration of server %s, which is saved in state. %s Run terraform plan again after API recovery.", m.ID.ValueString(), err))
 		return
 	}
 	r.Diagnostics.Append(r.State.Set(ctx, &m)...)
@@ -232,6 +264,15 @@ func (s *serverResource) ValidateConfig(ctx context.Context, req resource.Valida
 	if !m.Port.IsNull() && !m.Port.IsUnknown() && (m.Port.ValueInt64() < 1 || m.Port.ValueInt64() > 65535) {
 		r.Diagnostics.AddError("Invalid server port", "Port must be between 1 and 65535.")
 	}
+	if !m.MonitoringPort.IsNull() && !m.MonitoringPort.IsUnknown() && (m.MonitoringPort.ValueInt64() < 1 || m.MonitoringPort.ValueInt64() > 65535) {
+		r.Diagnostics.AddError("Invalid monitoring port", "monitoring_port must be between 1 and 65535.")
+	}
+	for _, v := range []types.String{m.MonitoringHost, m.ExecutionCommand} {
+		if !v.IsNull() && !v.IsUnknown() && strings.TrimSpace(v.ValueString()) == "" {
+			r.Diagnostics.AddError("Invalid server setting", "Explicit monitoring_host and execution_command values must not be blank.")
+		}
+	}
+
 	if !m.MemMin.IsNull() && !m.MemMin.IsUnknown() && m.MemMin.ValueInt64() < 1 {
 		r.Diagnostics.AddError("Invalid minimum memory", "mem_min must be at least 1.")
 	}
@@ -245,3 +286,10 @@ func (s *serverResource) ValidateConfig(ctx context.Context, req resource.Valida
 
 // NewMinecraftServerResource creates the Minecraft Java resource.
 func NewMinecraftServerResource() resource.Resource { return &serverResource{} }
+
+var _ resource.ResourceWithImportState = (*serverResource)(nil)
+
+// ID-only import cannot recover required download metadata from the verified API.
+func (s *serverResource) ImportState(_ context.Context, _ resource.ImportStateRequest, r *resource.ImportStateResponse) {
+	r.Diagnostics.AddError("Import unavailable for the verified API", "Crafty 4.10.4 GET does not reconstruct the required engine, version, original memory inputs, and server.properties port. Import by ID is unavailable; the provider will not guess these values from filenames or arbitrary execution commands. No server was modified.")
+}

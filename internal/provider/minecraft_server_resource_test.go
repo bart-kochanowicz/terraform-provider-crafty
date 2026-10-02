@@ -19,7 +19,7 @@ func TestRefreshPreservesDownloadInputs(t *testing.T) {
 		if r.Method != "GET" || r.URL.Path != "/api/v2/servers" {
 			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "data": []any{map[string]any{"server_id": "abc", "server_name": "changed", "auto_start": true}}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "data": []any{map[string]any{"server_id": "abc", "server_name": "changed", "auto_start": true, "server_ip": "127.0.0.1", "server_port": int64(25565), "execution_command": "java -Xms1000M -Xmx2000M -jar paper.jar nogui"}}})
 	}))
 	defer server.Close()
 	s := &serverResource{client: client.New(server.URL, "")}
@@ -57,7 +57,7 @@ func TestResourceCRUD(t *testing.T) {
 			}
 			_, _ = w.Write([]byte(`{"status":"ok","data":{"new_server_id":"abc"}}`))
 		case "GET":
-			_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "data": []any{map[string]any{"server_id": "abc", "server_name": name, "auto_start": false}}})
+			_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "data": []any{map[string]any{"server_id": "abc", "server_name": name, "auto_start": false, "server_ip": "127.0.0.1", "server_port": int64(25565), "execution_command": "java -Xms1000M -Xmx2000M -jar paper.jar nogui"}}})
 		case "PATCH":
 			if r.URL.Path != "/api/v2/servers/abc" {
 				t.Error("unexpected PATCH path")

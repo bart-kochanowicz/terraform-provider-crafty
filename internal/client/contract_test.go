@@ -65,6 +65,9 @@ func TestRecordedCraftyContract(t *testing.T) {
 	if err != nil || len(servers) != 1 || servers[0].ID != created.ID || servers[0].Name == nil || *servers[0].Name != "contract-test" || servers[0].AutoStart == nil || *servers[0].AutoStart {
 		t.Fatalf("collection fixture incompatible: %+v %v", servers, err)
 	}
+	if servers[0].MonitoringHost == nil || *servers[0].MonitoringHost != "127.0.0.1" || servers[0].MonitoringPort == nil || *servers[0].MonitoringPort != 25576 || servers[0].ExecutionCommand == nil || *servers[0].ExecutionCommand != "java -Xms1000M -Xmx2000M -jar paper.jar nogui" {
+		t.Fatalf("managed settings incompatible with recorded GET: %+v", servers[0])
+	}
 	var single Server
 	if err := api.request(ctx, "GET", "/api/v2/servers/"+created.ID, nil, &single); err != nil || !reflect.DeepEqual(single, servers[0]) {
 		t.Fatalf("single GET differs from collection model: %+v %v", single, err)

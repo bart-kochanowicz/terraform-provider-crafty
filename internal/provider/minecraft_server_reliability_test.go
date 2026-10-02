@@ -77,7 +77,7 @@ func assertServerID(t *testing.T, state tfsdk.State) serverModel {
 }
 
 func writeServer(w http.ResponseWriter, name string) {
-	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "data": []any{map[string]any{"server_id": "abc", "server_name": name, "auto_start": false}}})
+	_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "data": []any{map[string]any{"server_id": "abc", "server_name": name, "auto_start": false, "server_ip": "127.0.0.1", "server_port": int64(25565), "execution_command": "java -Xms1000M -Xmx2000M -jar paper.jar nogui"}}})
 }
 
 func TestCreateRefreshFailureDoesNotTaint(t *testing.T) {
@@ -254,7 +254,9 @@ func TestMutationTimeoutsKeepIdentityAndDoNotReplay(t *testing.T) {
 				}
 			case "PATCH":
 				response := resource.UpdateResponse{State: state}
-				s.Update(context.Background(), resource.UpdateRequest{State: state, Plan: tfsdk.Plan(state)}, &response)
+				changed := reliabilityModel()
+				changed.Name = types.StringValue("renamed")
+				s.Update(context.Background(), resource.UpdateRequest{State: state, Plan: tfsdk.Plan(reliabilityState(t, s, changed))}, &response)
 				if !response.Diagnostics.HasError() {
 					t.Fatal("update timeout did not fail")
 				}
