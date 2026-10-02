@@ -7,3 +7,4 @@
 crash.log
 
 /dev/__pycache__/
+/dist/
