@@ -53,6 +53,12 @@ jobs:
           make test vet docs-check
       - name: Verify release packages before publication
         run: make release-snapshot
+      - name: Import release signing key
+        id: signing
+        uses: crazy-max/ghaction-import-gpg@v7
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.PASSPHRASE }}
       - uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
@@ -60,3 +66,13 @@ jobs:
           args: release --clean --release-notes ${{ runner.temp }}/release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPG_FINGERPRINT: ${{ steps.signing.outputs.fingerprint }}
+      - name: Verify signed release before making it public
+        env:
+          GPG_FINGERPRINT: ${{ steps.signing.outputs.fingerprint }}
+        run: python3 dev/verify_release.py --source-manifest terraform-registry-manifest.json --require-signature --signing-fingerprint "$GPG_FINGERPRINT"
+      - name: Publish verified draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: gh release edit "$RELEASE_TAG" --draft=false --latest
