@@ -8,11 +8,26 @@ description: "Manage Minecraft Java servers through Crafty Controller v4."
 The Crafty provider manages Minecraft Java servers through Crafty Controller v4's v2 API. The verified baseline is **Crafty 4.10.4 with Paper 1.21.1**; other combinations are unverified. See the [API contract and support table](api-contract.md).
 
 ```hcl
+terraform {
+  required_providers {
+    crafty = {
+      source  = "bart-kochanowicz/crafty"
+      version = "0.1.1"
+    }
+  }
+}
+
 provider "crafty" {
   url   = var.crafty_url
   token = var.crafty_token
 }
 ```
+
+Run `terraform init` to install the signed community provider from Terraform
+Registry. Use a full-access API key for the verified baseline. In version 0.1.1,
+lost server visibility can cause an established resource to appear deleted;
+restore access before applying any unexpected create plan. See the repository
+README for the complete local quickstart and visibility limitations.
 
 {{ .SchemaMarkdown }}
 

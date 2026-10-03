@@ -4,7 +4,10 @@
 
 Download your platform's ZIP and `terraform-provider-crafty_0.1.1_SHA256SUMS`
 from [the v0.1.1 release](https://github.com/bart-kochanowicz/terraform-provider-crafty/releases/tag/v0.1.1).
-Version v0.1.1 is prepared for publication; these assets appear after the tag workflow succeeds.
+Version v0.1.1 is published on GitHub and in Terraform Registry. For normal online
+installation, require `bart-kochanowicz/crafty` version `0.1.1` and run
+`terraform init` without `-plugin-dir` or development overrides. The mirror steps
+below are an alternative for manually downloaded packages.
 
 | System | OS identifier | Architectures |
 | --- | --- | --- |
@@ -225,7 +228,6 @@ Register `bart-kochanowicz/terraform-provider-crafty` in Registry and check inge
 of the signed version. Registration alone does not make the unsigned v0.1.0 usable
 from Registry. Do not replace v0.1.0 binaries or move its tag.
 
-Once Registry reports the new version, verify `terraform init` without a development
-override or `-plugin-dir` in a fresh configuration requiring version 0.1.1. Until
-then, local mirror installation remains available. See the
+Registry ingestion and a fresh direct `terraform init` for 0.1.1 have been
+verified. Local mirror installation remains available as an alternative. See the
 [HashiCorp publishing requirements](https://developer.hashicorp.com/terraform/registry/providers/publishing).
