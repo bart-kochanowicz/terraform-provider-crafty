@@ -37,8 +37,10 @@ def verify_archives(directory):
             raise RuntimeError(f"Checksum mismatch: {name}")
         binary = f"{PROVIDER}_v{version}" + (".exe" if "_windows_" in name else "")
         with zipfile.ZipFile(archive) as package:
-            if package.namelist() != [binary] or package.getinfo(binary).file_size == 0:
+            if sorted(package.namelist()) != sorted([binary, "LICENSE"]) or package.getinfo(binary).file_size == 0:
                 raise RuntimeError(f"Unexpected archive contents: {name}")
+            if package.read("LICENSE") != (Path(__file__).resolve().parents[1] / "LICENSE").read_bytes():
+                raise RuntimeError(f"Archive license does not match the repository: {name}")
     return version
 
 

@@ -4,6 +4,8 @@ A Terraform Plugin Framework provider for Crafty Controller v4's v2 API.
 Provider address: `registry.terraform.io/bart-kochanowicz/crafty`.
 Go module: `github.com/bart-kochanowicz/terraform-provider-crafty`.
 
+Licensed under the [MIT License](LICENSE). Release archives include the license text.
+
 ## Project layout
 
 The following abbreviated layout follows HashiCorp's [Plugin Framework scaffolding](https://github.com/hashicorp/terraform-provider-scaffolding-framework), with a separate internal API client.
