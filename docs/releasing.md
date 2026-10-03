@@ -158,11 +158,15 @@ packaged but not executed. `Release snapshot` runs the same verification in PR C
 Existing packages can be checked separately with `make release-verify`.
 
 Before an initial public release, review [the MIT License](../LICENSE) and
-[the changelog](../CHANGELOG.md), and replace its planned/unreleased heading with
-the actual version and release date. Keep the Makefile's default VERSION, example
+[the finalized 0.1.0 changelog](../CHANGELOG.md). Its date records preparation;
+publication remains a separate action. If publication happens on a later date,
+update the entry date and pre-publication notice before tagging. Keep the Makefile's default VERSION, example
 version constraints, and installation guide aligned with the intended stable tag.
 The snapshot version comes from GoReleaser's metadata and may differ from 0.1.0
-when no stable tag exists.
+when no stable tag exists. `make release-version-check` compares the intended
+stable version with both example constraints, installation commands, and a dated
+changelog entry. The tag workflow also rejects a tag that differs from that version
+and uses only that version's changelog entry as the GitHub release description.
 
 Check the required branch rules separately: CI execution alone does not prevent a
 merge. Require Lint, Tests and build, Crafty acceptance tests, both Terraform

@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased — planned initial version 0.1.0
+Initial release notes finalized on 2026-10-03. Publication is pending; the
+[GitHub release](https://github.com/bart-kochanowicz/terraform-provider-crafty/releases/tag/v0.1.0)
+is the source of truth for availability.
+
+## 0.1.0 — 2026-10-03
 
 ### Provider capabilities
 
@@ -14,7 +18,6 @@
 ### Verification and distribution
 
 - MIT License included in the repository and every release archive.
-
 - HTTP client, resource, Terraform recovery/replacement, and live disposable Crafty acceptance tests; recorded API fixtures and live contract reports.
 - Example validation and controlled Terraform acceptance on Terraform 1.5.0 and 1.16.4.
 - Shared local and CI checks, generated provider/resource documentation, and documented pending-state recovery.
@@ -25,4 +28,4 @@
 - Default deletion preserves world directories in Crafty 4.10.4; replacement creates a distinct directory without reusing the old world.
 - ID-only import, Bedrock creation, server startup, EULA acceptance, and file management are not implemented.
 - Restricted-token permissions and other Crafty baselines remain unverified.
-- GitHub release publication and Terraform Registry registration/signing are separate steps. This entry describes the current planned initial release, not an already published version.
+- GitHub release publication and Terraform Registry registration/signing are separate steps. Registry installation is not available until that separate registration is completed.
