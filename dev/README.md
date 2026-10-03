@@ -85,11 +85,14 @@ test initialization is not affected by your manual smoke-test configuration.
 The test creates a uniquely named `tf-acc-*` server, verifies state against the API,
 refreshes it, renames it and updates automatic start, monitoring address/port, and
 launch command without replacing its ID, repairs external drift, checks an empty
-plan, tests omission and ID-only import rejection, and lets
-the test framework destroy it. `CheckDestroy` polls the API to verify removal.
+plan, tests omission and ID-only import rejection, then changes creation memory
+to verify replacement, a new ID, removal of the old record, and an empty plan.
+The test framework finally destroys the replacement. `CheckDestroy` polls the API
+to verify removal.
 A Go cleanup callback also deletes this run's server by captured ID or exact
 randomized name if a step fails, including creation before an ID reaches state.
-Cleanup errors fail the test. Forced termination (`kill -9`, a Go test timeout,
+Cleanup tracks both captured IDs and exact randomized names; errors fail the test.
+Forced termination (`kill -9`, a Go test timeout,
 or Docker/API failure) can prevent cleanup; inspect Crafty for the reported
 `tf-acc-*` resource and delete it manually after restoring connectivity.
 The suite does not delete unrelated servers or volumes.
@@ -102,8 +105,9 @@ Optional environment variables:
 | `CRAFTY_TEST_ENGINE` | `paper` | Engine available in the download catalog |
 | `CRAFTY_TEST_VERSION` | `1.21.1` | Version available for that engine |
 
-Creation requires internet access from Crafty. The server uses creation memory inputs 1–2 and port 25565; mutable command/monitoring
-probes then override these settings. It is never started and its EULA is not accepted.
+Creation requires internet access from Crafty. The server starts with creation
+memory inputs 1–2 and port 25565; mutable command/monitoring probes override these
+settings, and replacement raises the creation maximum memory input to 3. It is never started and its EULA is not accepted.
 Do not point these tests at a production instance. The token is passed through a
 sensitive Terraform input variable; avoid debug logging and keep test artifacts private.
 
@@ -139,10 +143,16 @@ Report-writing errors fail the helper and do not replace an earlier error.
 Forced termination, job cancellation, or an unwritable output directory can prevent
 report generation; the upload step reports a missing artifact as an error.
 
-The test uses the same lifecycle, mutable-settings, drift, import-rejection, and
-destroy suite as `make test-acc`. Additional Terraform acceptance scenarios use a
-controlled HTTP server to verify recovery after post-create/update failures,
-including a rejected initial settings PATCH, preserved private state, no taint,
+The test uses the same lifecycle, mutable-settings, drift, import-rejection,
+replacement, and destroy suite as `make test-acc`. In this fresh CI project it also
+checks that replacement preserves the old directory and creates a distinct new
+directory. The helper enables these filesystem checks only for its isolated
+`crafty-provider-ci-*` project; normal `make test-acc` does not inspect container
+files. Directory paths from these assertions are kept out of diagnostics and
+artifacts. A controlled HTTP server additionally verifies plan-only replacement
+for all six creation inputs without applying those changes. Other Terraform
+acceptance scenarios verify recovery after post-create/update failures, including
+a rejected initial settings PATCH, preserved private state, no taint,
 no duplicate POST, and empty plans after API recovery. A failure uploads an artifact
 with the acceptance output (if the tests started), container logs, Compose status, and Crafty application logs. Artifacts
 are retained for seven days. Database files, credentials, and Terraform state are

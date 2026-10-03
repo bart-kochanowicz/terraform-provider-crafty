@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"fmt"
 	"os"
+	"os/exec"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -45,7 +47,11 @@ func TestAccMinecraftServerLifecycle(t *testing.T) {
 	renamed := name + "-renamed"
 	t.Setenv("TF_VAR_crafty_acceptance_token", token)
 	api := client.New(endpoint, token)
-	var id string
+	var id, previousID, previousPath string
+	project := os.Getenv("CRAFTY_TEST_COMPOSE_PROJECT")
+	if project != "" && (!regexp.MustCompile(`^crafty-provider-ci-[a-z0-9-]+$`).MatchString(project) || endpoint != "http://127.0.0.1:18001") {
+		t.Fatal("filesystem checks require the isolated CI project and endpoint")
+	}
 
 	// Registered before resource.Test so fallback cleanup also runs after a failed
 	// apply, including a create response lost before its ID reached Terraform state.
@@ -58,7 +64,7 @@ func TestAccMinecraftServerLifecycle(t *testing.T) {
 			return
 		}
 		for _, server := range servers {
-			if server.ID != id && (server.Name == nil || (*server.Name != name && *server.Name != renamed)) {
+			if server.ID != id && server.ID != previousID && (server.Name == nil || (*server.Name != name && *server.Name != renamed)) {
 				continue
 			}
 			if err := api.DeleteServer(ctx, server.ID); err != nil && !client.IsNotFound(err) {
@@ -165,6 +171,11 @@ resource "crafty_minecraft_server" "test" {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			defer cancel()
+			if previousID != "" {
+				if err := waitForServerDeletion(ctx, api, previousID); err != nil {
+					return err
+				}
+			}
 			return waitForServerDeletion(ctx, api, id)
 		},
 		Steps: []resource.TestStep{
@@ -197,6 +208,71 @@ resource "crafty_minecraft_server" "test" {
 			{Config: config(renamed), Check: resource.ComposeTestCheckFunc(check(renamed), resource.TestCheckResourceAttr("crafty_minecraft_server.test", "auto_start", "true"), resource.TestCheckResourceAttr("crafty_minecraft_server.test", "monitoring_port", "25568"))},
 			{ResourceName: "crafty_minecraft_server.test", ImportState: true, ExpectError: regexp.MustCompile("Import unavailable for the verified API")},
 			{Config: config(renamed), PlanOnly: true, ConfigPlanChecks: emptyPlan},
+
+			{PreConfig: func() {
+				previousID = id
+				if project != "" {
+					ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+					defer cancel()
+					var err error
+					previousPath, err = replacementServerPath(ctx, endpoint, token, previousID)
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+			}, Config: strings.Replace(config(renamed), "mem_max = 2", "mem_max = 3", 1),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction("crafty_minecraft_server.test", plancheck.ResourceActionDestroyBeforeCreate)}},
+				Check: func(state *terraform.State) error {
+					stored := state.RootModule().Resources["crafty_minecraft_server.test"]
+					if stored == nil || stored.Primary == nil || stored.Primary.ID == "" || stored.Primary.ID == previousID {
+						return fmt.Errorf("replacement did not produce a new ID")
+					}
+					id = stored.Primary.ID
+					ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+					defer cancel()
+					servers, err := api.ListServers(ctx)
+					if err != nil {
+						return err
+					}
+					matching := 0
+					newIDFound := false
+					for _, server := range servers {
+						if server.ID == previousID {
+							return fmt.Errorf("old server still exists after replacement")
+						}
+						if server.Name != nil && *server.Name == renamed {
+							matching++
+						}
+						if server.ID == id {
+							newIDFound = true
+						}
+						if server.ID == id && (server.ExecutionCommand == nil || !strings.Contains(*server.ExecutionCommand, "-Xmx3000M")) {
+							return fmt.Errorf("replacement did not use updated memory input")
+						}
+					}
+					if !newIDFound {
+						return fmt.Errorf("new ID is absent from Crafty after replacement")
+					}
+					if matching != 1 {
+						return fmt.Errorf("replacement left %d matching servers", matching)
+					}
+					if project != "" {
+						newPath, err := replacementServerPath(ctx, endpoint, token, id)
+						if err != nil {
+							return err
+						}
+						if newPath == previousPath {
+							return fmt.Errorf("replacement reused old directory")
+						}
+						// Pass directories as arguments, never include them in logs or artifacts.
+						command := exec.CommandContext(ctx, "docker", "compose", "-p", project, "-f", "../../dev/compose.yml", "-f", "../../dev/compose.ci.yml", "exec", "-T", "crafty", "python3", "-c", "import pathlib,sys; assert all(pathlib.Path(p).is_dir() for p in sys.argv[1:])", previousPath, newPath)
+						if command.Run() != nil {
+							return fmt.Errorf("replacement directory retention check failed")
+						}
+					}
+					return nil
+				}},
+			{Config: strings.Replace(config(renamed), "mem_max = 2", "mem_max = 3", 1), PlanOnly: true, ConfigPlanChecks: emptyPlan},
 		},
 	}) // resource.Test always runs Terraform destroy and CheckDestroy at the end.
 }

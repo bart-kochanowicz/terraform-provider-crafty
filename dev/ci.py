@@ -22,6 +22,7 @@ class Integration:
         project = os.environ.get("COMPOSE_PROJECT_NAME", "")
         if not re.fullmatch(r"crafty-provider-ci-[a-z0-9-]+", project):
             raise RuntimeError("Set COMPOSE_PROJECT_NAME to a unique crafty-provider-ci-* name")
+        self.project = project
         self.compose = ["docker", "compose", "-p", project,
                         "-f", str(ROOT / "dev/compose.yml"),
                         "-f", str(ROOT / "dev/compose.ci.yml")]
@@ -107,7 +108,8 @@ class Integration:
             raise
         verify_contract(self, token)
         env = os.environ.copy()
-        env.update(CRAFTY_TOKEN=token, CRAFTY_URL="http://127.0.0.1:18001", TF_ACC="1")
+        env.update(CRAFTY_TOKEN=token, CRAFTY_URL="http://127.0.0.1:18001", TF_ACC="1",
+                   CRAFTY_TEST_COMPOSE_PROJECT=self.project)
         env.pop("TF_CLI_CONFIG_FILE", None)
         self.output.mkdir(parents=True, exist_ok=True)
         command = [env.get("GO", "go"), "test", "-v", "-race", "-count=1", "-timeout", "20m",
