@@ -179,16 +179,24 @@ merge. Require Lint, Tests and build, Crafty acceptance tests, both Terraform
 compatibility jobs, and Release snapshot before preparing a release tag. No tag
 or publication is created by the snapshot checks.
 
-After reviewing and committing the changes, merge the release commit into `main`,
-wait for CI (including Crafty acceptance tests) to pass, then tag that commit:
+After reviewing and committing the changes, merge the release commit into `main`
+and wait for its push CI (including Crafty acceptance tests) to pass. To authorize
+publication, open **Actions → Release → Run workflow**, select **main**, and enter
+the stable tag matching the committed version (for example `v0.1.2`). The workflow
+checks the selected commit's CI and version, verifies packages, imports the signing
+key, then creates an annotated tag and publishes the signed release in the same
+run. You do not need to create or push a tag locally, or add a personal access token.
+The Registry's existing release webhook ingests the published provider.
 
-```sh
-git checkout main
-git pull --ff-only
-# Publish only after review, merge, green main CI and explicit release authorization.
-git tag -a v0.1.1 -m 'Release v0.1.1'
-git push origin v0.1.1
-```
+Manual runs from other branches are rejected. An existing tag can be reused only
+when it points to the exact selected commit, allowing a failed run to be retried;
+the workflow never moves a tag and rejects already public versions. Rerun failed jobs on the original run if `main` has
+advanced. Merging a PR alone does not authorize publication.
+
+The existing tag-push path remains available for maintainers who prefer it.
+Both paths use the same validation, signing, and publication steps. Tags created
+using `GITHUB_TOKEN` do not trigger another tag-push workflow, so manual publication
+continues within the original run.
 
 `.github/workflows/release.yml` accepts stable `vMAJOR.MINOR.PATCH` tags, reruns unit
 tests, vet and the documentation check, verifies a complete snapshot and native
