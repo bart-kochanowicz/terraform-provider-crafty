@@ -13,6 +13,8 @@
 
 ### Verification and distribution
 
+- MIT License included in the repository and every release archive.
+
 - HTTP client, resource, Terraform recovery/replacement, and live disposable Crafty acceptance tests; recorded API fixtures and live contract reports.
 - Example validation and controlled Terraform acceptance on Terraform 1.5.0 and 1.16.4.
 - Shared local and CI checks, generated provider/resource documentation, and documented pending-state recovery.

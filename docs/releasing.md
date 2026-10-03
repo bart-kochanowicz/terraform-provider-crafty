@@ -13,7 +13,7 @@ These assets become available when the release workflow successfully publishes t
 | Windows | `windows` | `amd64`, `arm64` |
 
 Archives use `terraform-provider-crafty_0.1.0_<os>_<arch>.zip` and contain
-`terraform-provider-crafty_v0.1.0` (with `.exe` on Windows).
+`terraform-provider-crafty_v0.1.0` (with `.exe` on Windows) and the MIT `LICENSE`.
 SHA-256 checksums detect damaged or mismatched downloads; they are not signatures.
 
 ### Linux and macOS
@@ -150,14 +150,14 @@ make release-snapshot
 publishing. Snapshot versions differ from stable versions. The GoReleaser linker
 flags embed the release version in the provider metadata. The snapshot target
 also runs `make release-verify`: it checks the exact six platform archives,
-SHA-256 coverage and contents, then installs the native archive into a temporary
+SHA-256 coverage and contents (including an exact copy of LICENSE), then installs the native archive into a temporary
 provider mirror. Terraform init, validate, and schema export run in a fresh
 configuration without Crafty credentials or development overrides. The smoke test
 checks the native binary's `-version` output against package metadata; other platform binaries are
 packaged but not executed. `Release snapshot` runs the same verification in PR CI.
 Existing packages can be checked separately with `make release-verify`.
 
-Before an initial public release, select and commit the project's LICENSE, review
+Before an initial public release, review [the MIT License](../LICENSE) and
 [the changelog](../CHANGELOG.md), and replace its planned/unreleased heading with
 the actual version and release date. Keep the Makefile's default VERSION, example
 version constraints, and installation guide aligned with the intended stable tag.

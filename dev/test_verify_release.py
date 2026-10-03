@@ -20,6 +20,7 @@ class ReleaseArchiveTest(unittest.TestCase):
             binary = f"{PROVIDER}_v{version}" + (".exe" if system == "windows" else "")
             with zipfile.ZipFile(archive, "w") as package:
                 package.writestr(binary, b"test binary")
+                package.writestr("LICENSE", (Path(__file__).resolve().parents[1] / "LICENSE").read_bytes())
             lines.append(hashlib.sha256(archive.read_bytes()).hexdigest() + "  " + archive.name)
         checksums = directory / f"{PROVIDER}_{version}_SHA256SUMS"
         checksums.write_text("\n".join(lines) + "\n")
@@ -52,6 +53,23 @@ class ReleaseArchiveTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Checksum mismatch"):
                 verify_archives(directory)
 
+    def test_missing_or_changed_license_is_rejected_with_matching_checksum(self):
+        for license_text in (None, b"different license"):
+            with self.subTest(license_text=license_text), tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary)
+                _, checksums = self.packages(directory)
+                archive = next(directory.glob("*.zip"))
+                with zipfile.ZipFile(archive) as package:
+                    binary = next(name for name in package.namelist() if name != "LICENSE")
+                with zipfile.ZipFile(archive, "w") as package:
+                    package.writestr(binary, b"test binary")
+                    if license_text is not None:
+                        package.writestr("LICENSE", license_text)
+                lines = [hashlib.sha256(archive.read_bytes()).hexdigest() + "  " + archive.name if line.split()[1] == archive.name else line for line in checksums.read_text().splitlines()]
+                checksums.write_text("\n".join(lines))
+                with self.assertRaisesRegex(RuntimeError, "Unexpected archive contents|Archive license"):
+                    verify_archives(directory)
+
     def test_wrong_binary_name_is_rejected_even_with_matching_checksum(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
@@ -59,6 +77,7 @@ class ReleaseArchiveTest(unittest.TestCase):
             archive = next(directory.glob("*.zip"))
             with zipfile.ZipFile(archive, "w") as package:
                 package.writestr("wrong-version-binary", b"test binary")
+                package.writestr("LICENSE", (Path(__file__).resolve().parents[1] / "LICENSE").read_bytes())
             lines = [hashlib.sha256(archive.read_bytes()).hexdigest() + "  " + archive.name if line.split()[1] == archive.name else line for line in checksums.read_text().splitlines()]
             checksums.write_text("\n".join(lines))
             with self.assertRaisesRegex(RuntimeError, "Unexpected archive contents"):
