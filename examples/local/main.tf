@@ -3,7 +3,7 @@ terraform {
   required_providers {
     crafty = {
       source  = "bart-kochanowicz/crafty"
-      version = "0.1.2"
+      version = "~> 0.1.2"
     }
   }
 }

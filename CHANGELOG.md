@@ -8,8 +8,8 @@ from [GitHub Releases](https://github.com/bart-kochanowicz/terraform-provider-cr
 - Preserve established Minecraft server IDs and all existing Terraform state when the configured token no longer sees a server. Three consecutive successful collection responses without its ID now return a read error instead of allowing a duplicate create.
 - Servers deleted outside Terraform also remain in state: independently confirm deletion, back up state, and remove only the affected resource with `terraform state rm` before recreating it. Restore permissions instead when the server still exists. Pending post-create/update recovery and accepted DELETE verification are unchanged.
 - Add regression coverage for empty and filtered server collections, including unchanged state on read failure.
-- Add manual release publication from GitHub Actions, requiring successful CI for the selected main commit and a matching project version. The workflow creates an annotated tag and performs signed publication without a locally pushed tag.
-- Update installation examples and recovery documentation for 0.1.2. Registry installation must be verified after publication; restricted-token permission combinations remain outside the verified baseline.
+- Add manual release publication from GitHub Actions, requiring successful CI for the selected main commit and a finalized changelog entry. The workflow derives the tag from Makefile VERSION, creates an annotated tag and performs signed publication without a locally pushed tag.
+- Use compatible patch constraints in examples and version-independent installation instructions; future patch releases update only Makefile VERSION and the changelog. Update recovery documentation for 0.1.2. Registry installation must be verified after publication; restricted-token permission combinations remain outside the verified baseline.
 
 ## 0.1.1 — 2026-10-03
 

@@ -12,17 +12,6 @@ def check_version(root, tag=None):
     version = match[1]
     if tag is not None and tag != f"v{version}":
         raise RuntimeError(f"Release tag {tag} does not match project version v{version}")
-    for example in ("local", "docker"):
-        text = (root / f"examples/{example}/main.tf").read_text()
-        match = re.search(r'crafty\s*=\s*\{[^}]*\bversion\s*=\s*"([^"]+)"', text)
-        if match is None or match[1] != version:
-            raise RuntimeError(f"Provider version in examples/{example} does not match {version}")
-    guide = (root / "docs/releasing.md").read_text()
-    if f"## Install v{version} from GitHub Releases" not in guide:
-        raise RuntimeError("Installation guide does not match the intended release")
-    for documented in re.findall(r"^\$?version\s*=\s*['\"]?([0-9.]+)", guide, re.M):
-        if documented != version:
-            raise RuntimeError("Installation command version does not match the intended release")
     changelog = (root / "CHANGELOG.md").read_text()
     entry = re.search(r"^## " + re.escape(version) + r" — \d{4}-\d{2}-\d{2}\n(.*?)(?=^## |\Z)", changelog, re.M | re.S)
     if entry is None or not entry[1].strip():
@@ -34,13 +23,17 @@ def check_version(root, tag=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tag")
+    parser.add_argument("--print-tag", action="store_true", help="Print only the validated tag for automation")
     parser.add_argument("--notes-output", type=Path)
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     version, notes = check_version(root, args.tag)
     if args.notes_output:
         args.notes_output.write_text(notes)
-    print(f"Stable release version {version}: project, examples, installation guide and changelog agree")
+    if args.print_tag:
+        print(f"v{version}")
+    else:
+        print(f"Stable release version {version}: Makefile and finalized changelog agree")
 
 
 if __name__ == "__main__":

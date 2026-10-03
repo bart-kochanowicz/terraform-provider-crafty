@@ -12,7 +12,7 @@ terraform {
   required_providers {
     crafty = {
       source  = "bart-kochanowicz/crafty"
-      version = "0.1.2"
+      version = "~> 0.1.2"
     }
   }
 }
@@ -24,7 +24,7 @@ provider "crafty" {
 ```
 
 Run `terraform init` to install the signed community provider from Terraform
-Registry after 0.1.2 is published. Use a full-access API key for the verified
+Registry. This constraint accepts compatible 0.1.x patches starting at 0.1.2. Use a full-access API key for the verified
 baseline. From version 0.1.2, lost visibility of an established server returns a
 read error and preserves its state; restore access before retrying. Version 0.1.1
 can instead propose a duplicate create. See the repository
