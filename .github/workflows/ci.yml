@@ -47,43 +47,37 @@ jobs:
         with:
           terraform_version: 1.16.4
           terraform_wrapper: false
-      - name: Download and verify dependencies
-        run: |
-          go mod download
-          go mod verify
-          go mod tidy
-          git diff --exit-code -- go.mod go.sum
-      - name: Check generated documentation
-        run: make docs-check
+      - name: Verify dependencies and generated documentation
+        run: make deps-check docs-check
       - uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
           version: v2.15.0
           args: check
-      - name: Validate Docker Compose configuration
-        run: |
-          make dev-check
-          COMPOSE_PROJECT_NAME=crafty-provider-ci-validation docker compose -f dev/compose.yml -f dev/compose.ci.yml config --quiet
-      - name: Test CI isolation and credential handling
-        run: python3 -m unittest discover -s dev -p 'test_*.py'
-      - name: Check formatting
-        run: make fmt-check
-      - name: Test and build
-        run: make test vet build
-      - name: Validate Terraform examples with the local provider
-        shell: bash
-        run: |
-          config="$RUNNER_TEMP/crafty.tfrc"
-          cat > "$config" <<EOF_CONFIG
-          provider_installation {
-            dev_overrides {
-              "registry.terraform.io/bart-kochanowicz/crafty" = "$GITHUB_WORKSPACE/bin"
-            }
-            direct {}
-          }
-          EOF_CONFIG
-          TF_CLI_CONFIG_FILE="$config" terraform -chdir=examples/local validate
-          TF_CLI_CONFIG_FILE="$config" terraform -chdir=examples/docker validate
+      - name: Run shared local and CI checks
+        run: make check-core
+
+  compatibility:
+    name: Terraform compatibility (${{ matrix.terraform }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        terraform: ['1.5.0', '1.16.4']
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ matrix.terraform }}
+          terraform_wrapper: false
+      - name: Validate examples and verify Terraform state behavior
+        run: make validate-examples test-acc-mock
 
   integration:
     name: Crafty acceptance tests

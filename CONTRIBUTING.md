@@ -2,14 +2,34 @@
 
 ## Development setup
 
-Install Go 1.25 or newer, Terraform 1.5 or newer, Make, and golangci-lint v2.14.0. Download dependencies with `go mod download`.
+Install Go 1.25 or newer, Terraform 1.5 or newer, Make, Python 3, Docker Compose
+2.24.4 or newer, and golangci-lint v2.14.0. Download dependencies with `go mod download`.
 
 ```sh
 make fmt
 make check
 ```
 
-The lint configuration and GitHub Actions workflow are shared across all packages. Offline checks do not require a live Crafty instance or API token. The separate CI integration job starts and configures its own disposable Crafty instance. Tests using `httptest` require permission to bind a local port.
+The lint configuration and GitHub Actions workflow are shared across all packages. `make check-core` is shared with the **Tests and build** CI job: it checks
+formatting, Go tests/vet/build, Python helpers, both Compose configurations, and
+both Terraform examples. `make check` additionally runs lint, module integrity/tidy,
+generated-documentation and release checks, and controlled Terraform acceptance.
+These checks do not start containers or require a Crafty API token. First use of
+pinned documentation/release tools and module checks can download dependencies.
+`deps-check` runs `go mod tidy` and fails if tracked module files change; inspect
+any resulting changes before committing them.
+
+`make test-acc-mock` runs only the controlled HTTP scenarios (recovery, pending
+external deletion, and replacement plans), with the selected Terraform binary and
+without development overrides. CI validates examples and runs these scenarios
+with Terraform 1.5.0 and 1.16.4. To check another installed CLI locally:
+
+```sh
+make validate-examples test-acc-mock TERRAFORM=/absolute/path/to/terraform
+```
+
+Override tool paths with `GO`, `TERRAFORM`, `GOLANGCI_LINT`, `DOCKER`, and `PYTHON`.
+Docker Compose configuration checks do not require a running Docker daemon. The separate CI integration job starts and configures its own disposable Crafty instance. Tests using `httptest` require permission to bind a local port.
 
 ## Package boundaries
 

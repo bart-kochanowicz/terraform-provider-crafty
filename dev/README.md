@@ -112,6 +112,9 @@ Do not point these tests at a production instance. The token is passed through a
 sensitive Terraform input variable; avoid debug logging and keep test artifacts private.
 
 `make test` skips acceptance tests unless `TF_ACC=1` is explicitly set.
+`make test-acc-mock` runs the controlled Terraform scenarios without starting
+Crafty or using a token. CI runs these and example validation on Terraform 1.5.0
+and 1.16.4; the live integration job uses 1.16.4.
 
 ## Integration tests in GitHub Actions
 
