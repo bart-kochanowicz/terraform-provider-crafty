@@ -6,7 +6,7 @@ Go module: `github.com/bart-kochanowicz/terraform-provider-crafty`.
 
 ## Project layout
 
-The layout follows HashiCorp's [Plugin Framework scaffolding](https://github.com/hashicorp/terraform-provider-scaffolding-framework), with a separate internal API client.
+The following abbreviated layout follows HashiCorp's [Plugin Framework scaffolding](https://github.com/hashicorp/terraform-provider-scaffolding-framework), with a separate internal API client.
 
 ```text
 .
@@ -25,6 +25,8 @@ The layout follows HashiCorp's [Plugin Framework scaffolding](https://github.com
 │       ├── minecraft_server_resource.go
 │       └── minecraft_server_resource_test.go
 ├── docs/                          # Provider and resource references
+├── dev/                           # Disposable Crafty environment and CI helpers
+├── examples/docker/               # Local Docker Terraform configuration
 ├── examples/local/                # Runnable Terraform configuration
 ├── .github/workflows/ci.yml        # Lint, formatting, tests, build, validation
 ├── .golangci.yml
@@ -40,6 +42,7 @@ The API client has no Terraform dependencies. The provider converts Terraform va
 
 - Go 1.25 or newer and Make.
 - Terraform 1.5 or newer.
+- golangci-lint v2.14.0 for `make fmt`, `make lint`, and `make check`.
 - Crafty Controller 4.10.4 (verified baseline) with a trusted TLS certificate and an API token with server creation, access, and configuration permissions.
 - A supported engine/version pair available in Crafty's download catalog.
 
@@ -54,7 +57,7 @@ go mod tidy
 make fmt vet test build
 make install
 cd examples/local
-terraform init
+terraform init -plugin-dir="$HOME/.terraform.d/plugins"
 terraform validate
 export TF_VAR_crafty_url='https://crafty.example.com:8443'
 # Read the token without saving it in shell history (Bash/Zsh).

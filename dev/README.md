@@ -129,8 +129,15 @@ Before Terraform runs, `dev/api_contract.py` verifies the actual Crafty 4.10.4
 runtime version, RAM conversion, GET fields, PATCH capabilities and rejections,
 and DELETE file behavior against the [recorded contract](../docs/api-contract.md).
 A different image version fails the contract guard until its baseline is reviewed.
-The report `api-contract.json` is published for seven days on both success and
-failure and contains no credentials or server paths.
+The report `api-contract.json` is published for seven days on success and handled
+failures and contains no credentials, response bodies, or server paths. Its `result`
+is `passed`, `failed`, or `not_run`; `stage` identifies startup, bootstrap, precheck,
+version, fixtures, probes, or completion. Startup/authentication failures use
+`not_run` because no contract was verified. A later acceptance failure does not
+change a passing contract result. Probe cleanup failures are recorded separately.
+Report-writing errors fail the helper and do not replace an earlier error.
+Forced termination, job cancellation, or an unwritable output directory can prevent
+report generation; the upload step reports a missing artifact as an error.
 
 The test uses the same lifecycle, mutable-settings, drift, import-rejection, and
 destroy suite as `make test-acc`. Additional Terraform acceptance scenarios use a

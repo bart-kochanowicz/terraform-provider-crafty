@@ -42,7 +42,7 @@ func TestRecordedCraftyContract(t *testing.T) {
 				t.Error(err)
 			}
 			if !reflect.DeepEqual(got, map[string]any{"server_name": "renamed"}) {
-				t.Errorf("provider PATCH must only change name: %v", got)
+				t.Errorf("rename-only PATCH must contain only server_name: %v", got)
 			}
 			_, _ = w.Write(contractFixture(t, "patch-response"))
 		case r.URL.Path == "/api/v2/servers":

@@ -1,11 +1,13 @@
 """Verify isolation and credential handling in the CI helper."""
 
 import io
+import json
 import os
 import tempfile
+import subprocess
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from urllib.error import HTTPError
 
 import ci
@@ -64,6 +66,58 @@ class IntegrationTest(unittest.TestCase):
                         ci.main()
         logs.assert_called_once()
         down.assert_called_once()
+
+    def test_reports_failures_before_contract(self):
+        for stage in ("startup", "bootstrap", "precheck"):
+            with self.subTest(stage=stage), tempfile.TemporaryDirectory() as directory:
+                runner = self.runner()
+                runner.output = Path(directory)
+                with patch.object(runner, "token", side_effect=RuntimeError("secret-token") if stage == "bootstrap" else None, return_value="token"):
+                    with patch.object(runner, "api", side_effect=RuntimeError("secret-body")):
+                        with patch("ci.subprocess.run", side_effect=subprocess.CalledProcessError(1, "docker")):
+                            with self.assertRaises(Exception):
+                                runner.up() if stage == "startup" else runner.test()
+                content = (runner.output / "api-contract.json").read_text()
+                report = json.loads(content)
+                self.assertEqual(report["result"], "not_run")
+                self.assertEqual(report["stage"], stage)
+                self.assertNotIn("secret", content)
+
+    def test_logs_and_cleanup_do_not_mask_original_failure(self):
+        runner = self.runner()
+        with patch("sys.argv", ["ci.py", "run"]), patch("ci.Integration", return_value=runner):
+            with patch.object(runner, "up", side_effect=RuntimeError("original startup")):
+                with patch.object(runner, "logs", side_effect=RuntimeError("logs failed")):
+                    with patch.object(runner, "down", side_effect=RuntimeError("down failed")) as down:
+                        with self.assertRaisesRegex(RuntimeError, "original startup"):
+                            ci.main()
+        down.assert_called_once()
+
+    def test_acceptance_failure_preserves_passing_contract(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runner = self.runner()
+            runner.output = Path(directory)
+            process = MagicMock()
+            process.__enter__.return_value = process
+            process.stdout = ["secret-token acceptance failed\n"]
+            process.wait.return_value = 1
+            runner.mask("secret-token")
+            def passed_contract(runner, token):
+                ci.write_report(runner, {"result": "passed", "stage": "complete"})
+            with patch.object(runner, "token", return_value="secret-token"), patch.object(runner, "api"):
+                with patch("ci.verify_contract", side_effect=passed_contract), patch("ci.subprocess.Popen", return_value=process):
+                    with self.assertRaisesRegex(RuntimeError, "Acceptance tests failed"):
+                        runner.test()
+            self.assertEqual(json.loads((runner.output / "api-contract.json").read_text())["result"], "passed")
+            self.assertNotIn("secret-token", (runner.output / "acceptance.log").read_text())
+
+    def test_cleanup_failure_after_success_fails_run(self):
+        runner = self.runner()
+        with patch("sys.argv", ["ci.py", "run"]), patch("ci.Integration", return_value=runner):
+            with patch.object(runner, "up"), patch.object(runner, "test"):
+                with patch.object(runner, "down", side_effect=RuntimeError("down failed")):
+                    with self.assertRaisesRegex(RuntimeError, "down failed"):
+                        ci.main()
 
 
 if __name__ == "__main__":

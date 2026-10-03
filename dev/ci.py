@@ -11,7 +11,7 @@ import sys
 import urllib.error
 import urllib.request
 
-from api_contract import verify_contract
+from api_contract import verify_contract, write_report
 
 ROOT = Path(__file__).resolve().parent.parent
 JWT = re.compile(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+")
@@ -87,13 +87,24 @@ class Integration:
 
     def up(self):
         # Pulls and first-time migrations can take several minutes on a cold runner.
-        subprocess.run(self.compose + ["up", "-d", "--wait", "--wait-timeout", "600"],
-                       cwd=ROOT, check=True, timeout=900)
+        write_report(self, {"result": "not_run", "stage": "startup"})
+        try:
+            subprocess.run(self.compose + ["up", "-d", "--wait", "--wait-timeout", "600"],
+                           cwd=ROOT, check=True, timeout=900)
+        except Exception:
+            write_report(self, {"result": "not_run", "stage": "startup", "failure_code": "startup_failed"})
+            raise
 
     def test(self):
-        token = self.token()
-        # Authenticate with the newly issued API key before starting Terraform.
-        self.api("GET", "servers", token=token)
+        stage = "bootstrap"
+        try:
+            token = self.token()
+            stage = "precheck"
+            # Authenticate with the newly issued API key before starting Terraform.
+            self.api("GET", "servers", token=token)
+        except Exception:
+            write_report(self, {"result": "not_run", "stage": stage, "failure_code": stage + "_failed"})
+            raise
         verify_contract(self, token)
         env = os.environ.copy()
         env.update(CRAFTY_TOKEN=token, CRAFTY_URL="http://127.0.0.1:18001", TF_ACC="1")
@@ -145,14 +156,24 @@ def main():
     if command != "run":
         getattr(runner, command)()
         return
+    failed = False
     try:
         runner.up()
         runner.test()
     except Exception:
-        runner.logs()
+        failed = True
+        try:
+            runner.logs()
+        except Exception:
+            print("Failure diagnostics could not be collected", file=sys.stderr)
         raise
     finally:
-        runner.down()
+        try:
+            runner.down()
+        except Exception:
+            if not failed:
+                raise
+            print("Compose cleanup failed after the original failure", file=sys.stderr)
 
 
 if __name__ == "__main__":

@@ -117,7 +117,7 @@ jobs:
           name: crafty-api-contract-${{ github.run_id }}-${{ github.run_attempt }}
           path: bin/ci-logs/api-contract.json
           retention-days: 7
-          if-no-files-found: ignore
+          if-no-files-found: error
       - name: Collect failure diagnostics
         if: failure()
         run: python3 dev/ci.py logs
