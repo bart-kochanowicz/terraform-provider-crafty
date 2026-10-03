@@ -3,12 +3,18 @@ name: Release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Stable release tag matching the committed version (for example v0.1.2)'
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -17,6 +23,9 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: write
+      actions: read
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -25,8 +34,35 @@ jobs:
       - name: Validate release tag
         shell: bash
         run: |
-          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Expected a stable version tag such as v0.1.0" >&2
+            exit 1
+          fi
+      - name: Require green main CI for manual publication
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" != refs/heads/main ]]; then
+            echo "Manual releases must run from main." >&2
+            exit 1
+          fi
+          conclusion=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?event=push&head_sha=$GITHUB_SHA&per_page=1" --jq '.workflow_runs[0].conclusion')
+          if [[ "$conclusion" != success ]]; then
+            echo "The selected main commit must have a successful push CI run before publication." >&2
+            exit 1
+          fi
+      - name: Reject an already published version
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          published=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.tag_name == \"$RELEASE_TAG\" and .draft == false) | .tag_name")
+          if [[ -n "$published" ]]; then
+            echo "This version is already public. Prepare a new version instead of replacing it." >&2
             exit 1
           fi
       - name: Require a maintainer-selected license
@@ -36,8 +72,6 @@ jobs:
             exit 1
           fi
       - name: Check release version and prepare release notes
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
         run: python3 dev/release_version.py --tag "$RELEASE_TAG" --notes-output "$RUNNER_TEMP/release-notes.md"
       - uses: actions/setup-go@v6
         with:
@@ -59,6 +93,27 @@ jobs:
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.PASSPHRASE }}
+      - name: Create or verify the selected release tag
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            if [[ "$(git rev-parse "$RELEASE_TAG^{commit}")" != "$GITHUB_SHA" ]]; then
+              echo "Existing tag points to a different commit; tags must never be moved." >&2
+              exit 1
+            fi
+          else
+            tag_sha=$(gh api --method POST "repos/$GITHUB_REPOSITORY/git/tags" \
+              -f tag="$RELEASE_TAG" -f message="Release $RELEASE_TAG" \
+              -f object="$GITHUB_SHA" -f type=commit --jq .sha)
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/tags/$RELEASE_TAG" -f sha="$tag_sha"
+            git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          fi
+          # GoReleaser must observe the same tag as the legacy tag-push path.
+          git checkout --detach "$RELEASE_TAG"
       - uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
@@ -74,5 +129,4 @@ jobs:
       - name: Publish verified draft
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ github.ref_name }}
         run: gh release edit "$RELEASE_TAG" --draft=false --latest
