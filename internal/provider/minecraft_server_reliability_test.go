@@ -322,7 +322,11 @@ func TestDeleteWaitsForRemovalAndPreservesIDOnFailure(t *testing.T) {
 			}))
 			defer api.Close()
 			s := &serverResource{client: client.New(api.URL, ""), pollInterval: time.Millisecond}
-			state := reliabilityState(t, s, reliabilityModel())
+			model := reliabilityModel()
+			if !timeout {
+				model.Timeouts = testTimeouts(map[string]string{"delete": "1s"})
+			}
+			state := reliabilityState(t, s, model)
 			response := resource.DeleteResponse{State: state}
 			s.Delete(context.Background(), resource.DeleteRequest{State: state}, &response)
 			if response.Diagnostics.HasError() != timeout || deletes.Load() != 1 || gets.Load() < 3 {
@@ -415,6 +419,83 @@ func TestServerNameContractValidation(t *testing.T) {
 			if response.Diagnostics.HasError() == tc.valid {
 				t.Fatalf("configuration diagnostics disagree with API name constraint: %v", response.Diagnostics)
 			}
+		})
+	}
+}
+
+func TestDeleteRequiresConsecutiveAbsences(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		sequence []int
+	}{
+		{"reappearing server", []int{0, 0, 1, 0, 0, 0}},
+		{"transient error", []int{0, 0, 503, 0, 0, 0}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var gets, deletes atomic.Int32
+			api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == "DELETE" {
+					deletes.Add(1)
+					_, _ = io.WriteString(w, `{"status":"ok"}`)
+					return
+				}
+				index := int(gets.Add(1)) - 1
+				if index >= len(tc.sequence) {
+					t.Error("unexpected extra read")
+					w.WriteHeader(500)
+					return
+				}
+				switch tc.sequence[index] {
+				case 0:
+					_, _ = io.WriteString(w, `{"status":"ok","data":[]}`)
+				case 1:
+					_, _ = io.WriteString(w, `{"status":"ok","data":[{"server_id":"abc"}]}`)
+				default:
+					w.WriteHeader(tc.sequence[index])
+				}
+			}))
+			defer api.Close()
+			s := &serverResource{client: client.New(api.URL, ""), pollInterval: time.Millisecond}
+			model := reliabilityModel()
+			model.Timeouts = testTimeouts(map[string]string{"delete": "1s"})
+			state := reliabilityState(t, s, model)
+			response := resource.DeleteResponse{State: state}
+			s.Delete(context.Background(), resource.DeleteRequest{State: state}, &response)
+			if response.Diagnostics.HasError() || gets.Load() != int32(len(tc.sequence)) || deletes.Load() != 1 {
+				t.Fatalf("premature deletion confirmation: GET=%d DELETE=%d %v", gets.Load(), deletes.Load(), response.Diagnostics)
+			}
+		})
+	}
+}
+
+func TestDeleteVerificationRespectsDeadlineAndCancellation(t *testing.T) {
+	for _, cancelled := range []bool{false, true} {
+		t.Run(map[bool]string{false: "retry after deadline", true: "cancellation"}[cancelled], func(t *testing.T) {
+			var gets, deletes atomic.Int32
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == "DELETE" {
+					deletes.Add(1)
+					_, _ = io.WriteString(w, `{"status":"ok"}`)
+					return
+				}
+				gets.Add(1)
+				w.Header().Set("Retry-After", "60")
+				w.WriteHeader(429)
+				if cancelled {
+					cancel()
+				}
+			}))
+			defer api.Close()
+			s := &serverResource{client: client.New(api.URL, ""), pollInterval: time.Millisecond}
+			state := reliabilityState(t, s, reliabilityModel())
+			response := resource.DeleteResponse{State: state}
+			s.Delete(ctx, resource.DeleteRequest{State: state}, &response)
+			if !response.Diagnostics.HasError() || gets.Load() != 1 || deletes.Load() != 1 {
+				t.Fatalf("retry delay ignored cancellation/deadline: %v", response.Diagnostics)
+			}
+			assertServerID(t, response.State)
 		})
 	}
 }
