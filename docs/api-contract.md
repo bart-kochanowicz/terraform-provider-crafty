@@ -30,7 +30,7 @@ instead of fetching a changing specification during CI. The upstream source tag 
 | Area | Published specification | Observed Crafty 4.10.4 | Provider behavior |
 | --- | --- | --- | --- |
 | POST Java memory | Integer examples `1` and `2`; no unit declaration | Inputs `1/2` generate `-Xms1000M -Xmx2000M`; `1.5/2.5` generate `1500M/2500M` | Whole integer inputs, passed unchanged; `1 <= mem_min <= mem_max` |
-| Collection GET | Array of `Server` objects | Array with string `server_id`/`server_name` and boolean `auto_start` | Refresh name and `auto_start` by ID |
+| Collection GET | Array of `Server` objects | Array with string `server_id`/`server_name` and boolean `auto_start` | Refresh name, `auto_start`, monitoring address/port, and execution command by ID |
 | Single GET | Schema mistakenly lists `role_id`/`role_name` | A server object, with the same basic fields plus a `status` object | Keep collection reads; do not infer deletion from ambiguous single-GET errors |
 | Missing single GET | Not-found semantics unspecified | HTTP **400** with `NOT_AUTHORIZED` after deletion | Do not classify HTTP 400 as not found; it can also mean insufficient access |
 | PATCH | Only `server_name` documented | Name, `auto_start`, `server_ip`, `server_port`, and `execution_command` persisted in probes | All five verified fields are exposed as in-place updates |

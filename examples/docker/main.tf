@@ -26,7 +26,7 @@ provider "crafty" {
 }
 
 resource "crafty_minecraft_server" "example" {
-  name    = "Docker smoke test - rename"
+  name    = "Terraform Docker Minecraft"
   engine  = "paper"
   version = "1.21.1"
   mem_min = 1

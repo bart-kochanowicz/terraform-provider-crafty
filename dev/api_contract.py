@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -40,20 +41,35 @@ def file_exists(runner, path):
                            "import pathlib,sys; print(pathlib.Path(sys.argv[1]).exists())", path]).strip() == "True"
 
 
+def write_report(runner, report):
+    """Persist safe contract facts, without replacing an active failure."""
+    failing = sys.exc_info()[0] is not None
+    try:
+        runner.output.mkdir(parents=True, exist_ok=True)
+        (runner.output / "api-contract.json").write_text(json.dumps(report, indent=2) + "\n")
+    except OSError:
+        print("API contract report could not be written", file=sys.stderr)
+        if not failing:
+            raise RuntimeError("API contract report could not be written") from None
+
+
 def verify_contract(runner, token):
-    version = json.loads(runner.capture(["exec", "-T", "crafty", "cat", "/crafty/app/config/version.json"]))
-    actual_version = ".".join(str(version[key]) for key in ("major", "minor", "sub"))
-    if actual_version != "4.10.4":
-        raise RuntimeError(f"API contract: supported baseline is Crafty 4.10.4, got {actual_version}; verify a new baseline first")
-    spec = json.loads((FIXTURES / "spec-summary.json").read_text())
-    recorded_single = json.loads((FIXTURES / "server-response.json").read_text())["data"]
-    recorded_list = json.loads((FIXTURES / "list-response.json").read_text())["data"][0]
-    report = {"crafty_version": actual_version, "openapi_spec_version": spec["openapi_version"], "api_spec_version": spec["api_version"],
-              "openapi_sha256": spec["sha256"], "memory_commands": [], "checks": []}
-    runner.output.mkdir(parents=True, exist_ok=True)
-    report_path = runner.output / "api-contract.json"
+    report = {"result": "failed", "stage": "version", "memory_commands": [], "checks": []}
     pending = []
     try:
+        version = json.loads(runner.capture(["exec", "-T", "crafty", "cat", "/crafty/app/config/version.json"]))
+        # Normalize only integer version components; never publish arbitrary runtime strings.
+        actual_version = ".".join(str(int(version[key])) for key in ("major", "minor", "sub"))
+        report["crafty_version"] = actual_version
+        if actual_version != "4.10.4":
+            raise RuntimeError("API contract: unsupported Crafty baseline; verify a new baseline first")
+        report["stage"] = "fixtures"
+        spec = json.loads((FIXTURES / "spec-summary.json").read_text())
+        recorded_single = json.loads((FIXTURES / "server-response.json").read_text())["data"]
+        recorded_list = json.loads((FIXTURES / "list-response.json").read_text())["data"][0]
+        report.update(openapi_spec_version=spec["openapi_version"], api_spec_version=spec["api_version"],
+                      openapi_sha256=spec["sha256"])
+        report["stage"] = "probes"
         for minimum, maximum, remove_files in [(1, 2, False), (1.5, 2.5, True)]:
             payload = json.loads((FIXTURES / "create-request.json").read_text())
             payload["name"] = "contract-" + uuid.uuid4().hex
@@ -130,7 +146,11 @@ def verify_contract(runner, token):
             report["checks"].append("DELETE files=true removes directory" if remove_files else "DELETE default preserves directory")
         report["checks"].extend(["integer and fractional RAM conversion", "GET collection and single-server field types", "missing single GET returns HTTP 400 NOT_AUTHORIZED"])
         report["result"] = "passed"
+        report["stage"] = "complete"
         print(f"API contract passed: Crafty {actual_version}, RAM 1/2 -> 1000M/2000M, GET fields, five PATCH fields, DELETE semantics", flush=True)
+    except Exception:
+        report["failure_code"] = "contract_verification_failed"
+        raise
     finally:
         # Each ID is registered immediately after POST. CI teardown also removes all
         # project volumes if a response is lost or the API becomes unavailable.
@@ -139,4 +159,4 @@ def verify_contract(runner, token):
                 request(token, "DELETE", "servers/" + server_id + "?files=true")
             except Exception:
                 report["cleanup_error"] = True
-        report_path.write_text(json.dumps(report, indent=2) + "\n")
+        write_report(runner, report)
