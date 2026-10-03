@@ -2,6 +2,13 @@
 
 This Docker Compose stack runs a disposable Crafty installation for provider development. It uses the [official Crafty image](https://docs.craftycontrol.com/pages/getting-started/installation/docker/), which supports ARM64 and AMD64. Crafty is pinned to 4.10.4; set `CRAFTY_IMAGE` to test another official tag or digest.
 
+For a first run with a fresh checkout, isolated volumes, and a complete manual
+create/update/destroy walkthrough, start with the [README quickstart](../README.md#local-quickstart).
+The commands below use the persistent `crafty-provider-dev` project by default.
+If you set `COMPOSE_PROJECT_NAME`, keep the same value throughout startup,
+credentials, testing, and cleanup; restore it when opening a new terminal.
+Different project names isolate volumes, but do not change published ports.
+
 ## Start and inspect
 
 Start Docker Desktop, OrbStack, or another Docker engine. From the repository root:
@@ -40,9 +47,9 @@ From the repository root:
 make dev-provider
 export TF_CLI_CONFIG_FILE="$PWD/bin/dev.tfrc"
 cd examples/docker
-terraform validate
 read -rs TF_VAR_crafty_token
 export TF_VAR_crafty_token
+terraform validate
 terraform plan
 terraform apply
 ```
@@ -193,4 +200,11 @@ To intentionally remove all environment data, first destroy managed resources, t
 docker compose -f dev/compose.yml down --volumes
 ```
 
-This permanently removes the local Crafty database, credentials, and worlds. If volumes are removed before Terraform destroy, the saved state points to servers that no longer exist.
+This permanently removes the selected Compose project's Crafty database,
+credentials, and worlds. With no project override, it removes `crafty-provider-dev`.
+If you used the quickstart's separate project, restore its original
+`COMPOSE_PROJECT_NAME` before cleanup or pass `-p` explicitly. Confirm
+`terraform destroy` succeeded and `terraform state list` is empty first.
+If volumes are removed before Terraform destroy, the saved state points to servers
+that no longer exist. Neither `make dev-down` nor volume removal deletes local
+Terraform state. Do not use `docker system prune` to clean this environment.

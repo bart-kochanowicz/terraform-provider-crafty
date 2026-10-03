@@ -6,88 +6,179 @@ Go module: `github.com/bart-kochanowicz/terraform-provider-crafty`.
 
 Licensed under the [MIT License](LICENSE). Release archives include the license text.
 
-## Project layout
+## Start here
 
-The following abbreviated layout follows HashiCorp's [Plugin Framework scaffolding](https://github.com/hashicorp/terraform-provider-scaffolding-framework), with a separate internal API client.
-
-```text
-.
-├── main.go                         # Plugin entry point
-├── internal/
-│   ├── client/
-│   │   ├── client.go               # HTTP transport, authentication, and errors
-│   │   ├── client_test.go          # Transport and failure-path tests
-│   │   ├── models.go              # Typed Crafty JSON models
-│   │   └── servers.go             # Server endpoint operations
-│   └── provider/
-│       ├── provider.go            # Provider configuration and registration
-│       ├── provider_test.go       # Configuration and registration tests
-│       ├── minecraft_server_model.go
-│       ├── minecraft_server_schema.go
-│       ├── minecraft_server_resource.go
-│       └── minecraft_server_resource_test.go
-├── docs/                          # Provider and resource references
-├── dev/                           # Disposable Crafty environment and CI helpers
-├── examples/docker/               # Local Docker Terraform configuration
-├── examples/local/                # Runnable Terraform configuration
-├── .github/workflows/ci.yml        # Lint, formatting, tests, build, validation
-├── .golangci.yml
-├── CONTRIBUTING.md                # Package boundaries and development workflow
-├── Makefile
-├── go.mod
-└── go.sum
-```
-
-The API client has no Terraform dependencies. The provider converts Terraform values into typed API requests and API responses into state and diagnostics. Tests live beside the code they verify. See [contributing instructions](CONTRIBUTING.md) and [provider documentation](docs/index.md).
+To try the provider from source on a disposable local Crafty instance, follow the
+[local quickstart](#local-quickstart). You do not need a published release or a
+Terraform Registry listing. For an existing Crafty instance, use
+[build and local installation](#build-and-local-installation).
 
 ## Requirements
 
-- Go 1.25 or newer and Make.
-- Terraform 1.5 or newer.
-- golangci-lint v2.14.0 for `make fmt`, `make lint`, and `make check`.
-- Python 3 and Docker Compose 2.24.4 or newer for the full local `make check`.
-- Crafty Controller 4.10.4 (verified baseline) with a trusted TLS certificate and an API token with server creation, access, and configuration permissions.
-- A supported engine/version pair available in Crafty's download catalog.
+- Go 1.25 or newer, Git, Make, and Terraform 1.5 or newer.
+- For the local quickstart: a running Docker engine with Docker Compose and free
+  local ports 8443, 18000, and 25565. Docker Desktop or OrbStack is suitable.
+- Internet access for Go dependencies, container images, and Crafty's server download.
+- For an existing instance: Crafty Controller 4.10.4 (verified baseline), a trusted
+  TLS certificate, and an API token with server creation, access, configuration,
+  and deletion permissions. Other versions and restricted tokens are unverified.
+- golangci-lint v2.14.0 is needed only for formatting/lint and the full checks;
+  Python 3 and Docker Compose 2.24.4 or newer are also needed for `make check`.
 
-## Install a release
+## Local quickstart
 
-For prebuilt Linux, macOS and Windows binaries, checksum verification, and Terraform initialization, follow [the v0.1.0 installation guide](docs/releasing.md). Assets are published by the tag workflow. GitHub Releases and Terraform Registry publication are separate steps.
+Commands below are for Bash or Zsh on macOS/Linux. Start Docker first. Use one
+terminal throughout so the project name, provider configuration, and token remain
+available. The separate Compose project gets fresh volumes; it still uses fixed
+host ports, so stop any other local stack occupying those ports first.
 
-## Build and local installation
+### 1. Create a fresh checkout and start Crafty
 
 ```sh
-go mod tidy
-make fmt vet test build
-make install
-cd examples/local
-terraform init -plugin-dir="$HOME/.terraform.d/plugins"
-terraform validate
-export TF_VAR_crafty_url='https://crafty.example.com:8443'
-# Read the token without saving it in shell history (Bash/Zsh).
+export COMPOSE_PROJECT_NAME="crafty-quickstart-$(date +%s)"
+git clone https://github.com/bart-kochanowicz/terraform-provider-crafty.git "$HOME/$COMPOSE_PROJECT_NAME"
+cd "$HOME/$COMPOSE_PROJECT_NAME"
+
+# Avoid settings inherited from another Terraform or Crafty session.
+unset TF_CLI_CONFIG_FILE TF_DATA_DIR TF_PLUGIN_CACHE_DIR TF_REATTACH_PROVIDERS
+unset TF_VAR_crafty_url TF_VAR_crafty_token CRAFTY_TOKEN CRAFTY_IMAGE
+unset TF_CLI_ARGS TF_CLI_ARGS_init TF_CLI_ARGS_validate TF_CLI_ARGS_plan TF_CLI_ARGS_apply TF_CLI_ARGS_destroy
+
+docker version
+make dev-check
+make dev-up
+make dev-status
+```
+
+Both services should be healthy. Image downloads and first initialization can take
+several minutes. If startup times out, inspect `make dev-logs` (Ctrl-C stops log
+streaming) and retry `make dev-up`. A port conflict needs to be resolved first;
+changing the project name alone does not change ports.
+
+### 2. Sign in and create a token
+
+```sh
+make dev-credentials
+```
+
+Open **https://localhost:8443**, accept the generated certificate for this local
+instance, and sign in using the displayed credentials. Change the initial password.
+In your user's **API Keys** settings, create a **superuser API key** for this
+disposable instance. Do not paste credentials or the token into issues or commits.
+
+Terraform uses **http://127.0.0.1:18000**, the loopback-only API bridge. The dashboard
+address and the API bridge address serve different purposes. This local bridge
+setup is for disposable development; use trusted HTTPS with a real installation.
+
+### 3. Build and create a server
+
+From the repository root:
+
+```sh
+make test vet dev-provider
+export TF_CLI_CONFIG_FILE="$PWD/bin/dev.tfrc"
+cd examples/docker
+
+# Paste the API key, then press Enter. Input is hidden.
 read -rs TF_VAR_crafty_token
 export TF_VAR_crafty_token
+terraform validate
 terraform plan
 terraform apply
 ```
 
-`make install` copies version 0.1.0 to Terraform's local plugin directory for the current operating system and architecture. To initialize exclusively from that directory, use:
+Do **not** run `terraform init` for this development-override path. Terraform's
+warning about development overrides is expected. The CLI configuration is local to
+this checkout; it does not edit `~/.terraformrc` or install a global plugin.
+
+The plan should show **one resource to add**. Review it, then confirm apply with
+`yes`. The example uses Paper 1.21.1 and creation memory inputs 1–2, which generate
+1000–2000 JVM MiB in Crafty 4.10.4. Creation downloads the server executable.
+Check the returned `server_id` and the server's appearance in the Crafty dashboard.
+The provider does not start Minecraft or accept its EULA. A created record confirms
+API metadata visibility, not successful completion of every background download.
+
+### 4. Verify an update and convergence
+
+In `examples/docker/main.tf`, change only the resource's `name`, for example to
+`"Terraform quickstart renamed"`. Run:
 
 ```sh
+terraform plan
+terraform apply
+terraform output server_id
+terraform plan
+```
+
+Expect **one resource to change**, the same server ID, the new name in Crafty,
+and finally **No changes**. If the plan proposes replacement, check that only
+`name` changed. Engine, version, creation memory, host, and port require replacement.
+For a resource that stays pending, follow the [recovery procedure](docs/resources/minecraft_server.md#resolving-a-server-that-stays-pending).
+
+### 5. Destroy, then remove the disposable environment
+
+Still in `examples/docker`, with the same token and CLI configuration:
+
+```sh
+terraform destroy
+terraform state list
+```
+
+Confirm destroy with `yes`. The state list should be empty and the server should
+be absent from Crafty. If destroy fails, keep the state and volumes and resolve the
+error before continuing. Default deletion preserves world directories in Crafty.
+The next command removes those retained files together with this test instance's
+configuration, credentials, logs, backups, and imports:
+
+```sh
+cd ../..
+docker compose -f dev/compose.yml -p "$COMPOSE_PROJECT_NAME" down --volumes
+unset TF_VAR_crafty_token TF_CLI_CONFIG_FILE COMPOSE_PROJECT_NAME
+```
+
+The checkout remains available for inspection. Terraform state can contain
+sensitive data; keep it private. To stop and preserve the instance instead of
+removing it, use `make dev-down` with the same project name. In a new terminal,
+restore the original project name before running any Compose command.
+Do not use a global Docker prune or delete state to reset this test.
+
+## Install a release
+
+For prebuilt Linux, macOS and Windows binaries, checksum verification, and Terraform
+initialization, follow [the v0.1.0 installation guide](docs/releasing.md). That guide
+describes the intended release; check that its assets have actually been published
+before downloading. GitHub Releases and Terraform Registry publication are separate
+steps.
+
+## Build and local installation
+
+For an existing Crafty instance, from a fresh checkout:
+
+```sh
+make test vet build
+make install
+cd examples/local
+# Use an empty CLI config to avoid global development overrides.
+export TF_CLI_CONFIG_FILE="$(mktemp "${TMPDIR:-/tmp}/crafty-cli.XXXXXX")"
 terraform init -plugin-dir="$HOME/.terraform.d/plugins"
+export TF_VAR_crafty_url='https://crafty.example.com:8443'
+read -rs TF_VAR_crafty_token
+export TF_VAR_crafty_token
+terraform validate
+terraform plan
+terraform apply
 ```
 
-Alternatively, build the provider and add an absolute repository path to your Terraform CLI configuration (`~/.terraformrc`):
+Replace the URL and use your instance's API key. `make install` copies version
+0.1.0 to Terraform's local plugin directory for the current OS and architecture.
+The explicit plugin directory restricts initialization to that mirror. Use a fresh
+example directory; do not reuse state or a lock file from another build. Retain
+state for subsequent management and restore these environment variables in later
+sessions. Unset the token and CLI config when finished.
 
-```hcl
-provider_installation {
-  dev_overrides {
-    "registry.terraform.io/bart-kochanowicz/crafty" = "/absolute/path/to/terraform-provider-crafty/bin"
-  }
-  direct {}
-}
-```
-
-With development overrides, skip `terraform init` for this example and run `terraform validate`, `terraform plan`, and `terraform apply` directly. Terraform may warn about overrides; this is expected.
+For development, `make dev-provider` writes `bin/dev.tfrc`; use its absolute path
+as `TF_CLI_CONFIG_FILE` and skip init, as in the quickstart. More details are in
+[the environment guide](dev/README.md).
 
 ## Configuration
 
@@ -172,4 +263,38 @@ make check
 
 Use v2.14.0 for exact CI parity; see the [official installation instructions](https://golangci-lint.run/docs/welcome/install/local/) for version-specific binaries. `make fmt` updates Go import/formatting and Terraform examples. `make fmt-check` only checks formatting. `make lint` runs the configured analyzers and checks formatting. The full `make check` also covers module integrity/tidy, generated docs, release configuration, Python helpers, Compose configuration, example validation, and controlled Terraform acceptance. It does not start Crafty. Override executable paths using `GO`, `GOLANGCI_LINT`, `TERRAFORM`, `DOCKER`, and `PYTHON` when needed.
 
-To prevent merging failing changes, configure a GitHub branch ruleset for `main` and require the **Lint**, **Tests and build**, and **Crafty acceptance tests** status checks plus **Terraform compatibility (1.5.0)** and **Terraform compatibility (1.16.4)** and **Release snapshot** after their first workflow run. The workflow alone runs checks but does not enforce branch protection.
+The [Protect main ruleset](https://github.com/bart-kochanowicz/terraform-provider-crafty/rules/24375657) requires a pull request, an up-to-date branch, and all six checks listed above. It also blocks force pushes and deletion of `main`. These GitHub settings are separate from the workflow; maintainers should verify they remain active when changing CI.
+
+## Project layout
+
+The following abbreviated layout follows HashiCorp's [Plugin Framework scaffolding](https://github.com/hashicorp/terraform-provider-scaffolding-framework), with a separate internal API client.
+
+```text
+.
+├── main.go                         # Plugin entry point
+├── internal/
+│   ├── client/
+│   │   ├── client.go               # HTTP transport, authentication, and errors
+│   │   ├── client_test.go          # Transport and failure-path tests
+│   │   ├── models.go              # Typed Crafty JSON models
+│   │   └── servers.go             # Server endpoint operations
+│   └── provider/
+│       ├── provider.go            # Provider configuration and registration
+│       ├── provider_test.go       # Configuration and registration tests
+│       ├── minecraft_server_model.go
+│       ├── minecraft_server_schema.go
+│       ├── minecraft_server_resource.go
+│       └── minecraft_server_resource_test.go
+├── docs/                          # Provider and resource references
+├── dev/                           # Disposable Crafty environment and CI helpers
+├── examples/docker/               # Local Docker Terraform configuration
+├── examples/local/                # Runnable Terraform configuration
+├── .github/workflows/ci.yml        # Lint, formatting, tests, build, validation
+├── .golangci.yml
+├── CONTRIBUTING.md                # Package boundaries and development workflow
+├── Makefile
+├── go.mod
+└── go.sum
+```
+
+The API client has no Terraform dependencies. The provider converts Terraform values into typed API requests and API responses into state and diagnostics. Tests live beside the code they verify. See [contributing instructions](CONTRIBUTING.md) and [provider documentation](docs/index.md).
