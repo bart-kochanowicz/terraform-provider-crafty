@@ -4,6 +4,8 @@ This Docker Compose stack runs a disposable Crafty installation for provider dev
 
 For a first run with a fresh checkout, isolated volumes, and a complete manual
 create/update/destroy walkthrough, start with the [README quickstart](../README.md#local-quickstart).
+The README path installs published 0.1.1 from Registry. The development-override
+commands below build source and intentionally skip Terraform init.
 The commands below use the persistent `crafty-provider-dev` project by default.
 If you set `COMPOSE_PROJECT_NAME`, keep the same value throughout startup,
 credentials, testing, and cleanup; restore it when opening a new terminal.

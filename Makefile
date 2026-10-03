@@ -6,7 +6,7 @@ DOCKER ?= docker
 PYTHON ?= python3
 DEV_COMPOSE := $(DOCKER) compose -f dev/compose.yml
 BINARY := terraform-provider-crafty
-PLATFORM := $(shell $(GO) env GOOS)_$(shell $(GO) env GOARCH)
+PLATFORM = $(shell $(GO) env GOOS)_$(shell $(GO) env GOARCH)
 PLUGIN_DIR ?= $(HOME)/.terraform.d/plugins/registry.terraform.io/bart-kochanowicz/crafty/$(VERSION)/$(PLATFORM)
 
 .PHONY: build test fmt fmt-check lint check vet install clean

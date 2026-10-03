@@ -8,20 +8,22 @@ Licensed under the [MIT License](LICENSE). Release archives include the license 
 
 ## Start here
 
-To try the provider from source on a disposable local Crafty instance, follow the
-[local quickstart](#local-quickstart). You do not need a published release or a
-Terraform Registry listing. For an existing Crafty instance, use
+To try the published provider on a disposable local Crafty instance, follow the
+[local quickstart](#local-quickstart). For an existing Crafty instance, use
+[Registry installation](#install-a-release). To modify the provider itself, see
 [build and local installation](#build-and-local-installation).
 
 ## Requirements
 
-- Go 1.25 or newer, Git, Make, and Terraform 1.5 or newer.
+- Git, Make, and Terraform 1.5 or newer.
+- Go 1.25 or newer only when building the provider or running its development checks.
 - For the local quickstart: a running Docker engine with Docker Compose and free
   local ports 8443, 18000, and 25565. Docker Desktop or OrbStack is suitable.
-- Internet access for Go dependencies, container images, and Crafty's server download.
+- Internet access for Registry packages, container images, and Crafty's server download.
 - For an existing instance: Crafty Controller 4.10.4 (verified baseline), a trusted
   TLS certificate, and an API token with server creation, access, configuration,
-  and deletion permissions. Other versions and restricted tokens are unverified.
+  and deletion permissions. Other versions and general restricted-token support are unverified; see the
+  [visibility limitation](#api-token-visibility).
 - golangci-lint v2.14.0 is needed only for formatting/lint and the full checks;
   Python 3 and Docker Compose 2.24.4 or newer are also needed for `make check`.
 
@@ -70,14 +72,17 @@ Terraform uses **http://127.0.0.1:18000**, the loopback-only API bridge. The das
 address and the API bridge address serve different purposes. This local bridge
 setup is for disposable development; use trusted HTTPS with a real installation.
 
-### 3. Build and create a server
+### 3. Install from Registry and create a server
 
 From the repository root:
 
 ```sh
-make test vet dev-provider
-export TF_CLI_CONFIG_FILE="$PWD/bin/dev.tfrc"
+# Ignore global CLI overrides while testing the published provider.
+mkdir -p bin
+printf 'provider_installation { direct {} }\n' > bin/registry.tfrc
+export TF_CLI_CONFIG_FILE="$PWD/bin/registry.tfrc"
 cd examples/docker
+terraform init
 
 # Paste the API key, then press Enter. Input is hidden.
 read -rs TF_VAR_crafty_token
@@ -87,9 +92,11 @@ terraform plan
 terraform apply
 ```
 
-Do **not** run `terraform init` for this development-override path. Terraform's
-warning about development overrides is expected. The CLI configuration is local to
-this checkout; it does not edit `~/.terraformrc` or install a global plugin.
+Terraform should install **bart-kochanowicz/crafty v0.1.1** with a developer
+signature (`self-signed`). This is expected for a community provider. The CLI
+configuration is local to this checkout and leaves `~/.terraformrc` unchanged.
+A development-override warning is unexpected on this path; check that
+`TF_CLI_CONFIG_FILE` points to the new `bin/registry.tfrc`.
 
 The plan should show **one resource to add**. Review it, then confirm apply with
 `yes`. The example uses Paper 1.21.1 and creation memory inputs 1–2, which generate
@@ -144,12 +151,28 @@ Do not use a global Docker prune or delete state to reset this test.
 
 ## Install a release
 
-For prebuilt Linux, macOS and Windows binaries, checksum verification, and Terraform
-initialization, follow [the installation guide](docs/releasing.md).
-[Version v0.1.0 is available on GitHub Releases](https://github.com/bart-kochanowicz/terraform-provider-crafty/releases/tag/v0.1.0).
-Version 0.1.1 is prepared with Registry signing support; it is not yet published.
-Until the signed release is ingested by Registry, use the local mirror installation
-in the guide. For existing 0.1.0 downloads, use version 0.1.0 in those commands.
+Version **0.1.1** is published in [Terraform Registry](https://registry.terraform.io/providers/bart-kochanowicz/crafty/0.1.1).
+For an existing Crafty instance, use a fresh checkout, configure its URL and token,
+and initialize the example without a local mirror:
+
+```sh
+mkdir -p bin
+printf 'provider_installation { direct {} }\n' > bin/registry.tfrc
+export TF_CLI_CONFIG_FILE="$PWD/bin/registry.tfrc"
+cd examples/local
+terraform init
+export TF_VAR_crafty_url='https://crafty.example.com:8443'
+read -rs TF_VAR_crafty_token
+export TF_VAR_crafty_token
+terraform validate
+terraform plan
+```
+
+Replace the URL and use a full-access API key belonging to an account with access
+to the managed servers. Review the plan before applying to your existing instance.
+Keep the resulting `.terraform.lock.hcl` for repeatable provider installation.
+Unset the token and CLI config when finished. For offline/local-mirror installation
+and direct GitHub downloads, see [the installation guide](docs/releasing.md).
 
 ## Build and local installation
 
@@ -180,6 +203,22 @@ sessions. Unset the token and CLI config when finished.
 For development, `make dev-provider` writes `bin/dev.tfrc`; use its absolute path
 as `TF_CLI_CONFIG_FILE` and skip init, as in the quickstart. More details are in
 [the environment guide](dev/README.md).
+
+## API token visibility
+
+Use a full-access key for the verified quickstart. In Crafty 4.10.4, disabling
+`full_access` on an administrator's key can hide servers when the account has no
+server roles. An API request can then return HTTP 200 with an empty collection
+while the server still exists. Creation permission alone does not guarantee
+visibility of the new server.
+
+**Provider 0.1.1 cannot distinguish this from external deletion for an established
+resource:** after three missing observations, a plan may propose creating a server
+that already exists. If this happens after changing a token or roles, stop before
+apply, restore the original full-access token/account access, and run plan again.
+Do not use state removal as a workaround for lost visibility. The pending-state
+recovery procedure applies only after confirming real deletion.
+See [verification results and remaining scope](docs/verification.md).
 
 ## Configuration
 

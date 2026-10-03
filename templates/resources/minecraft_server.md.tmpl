@@ -124,6 +124,13 @@ avoid duplicate servers.
 
 ### Resolving a server that stays pending
 
+Version 0.1.1 also has an established-resource visibility limitation: a restricted
+key may receive an empty successful collection while the server still exists.
+After three missing observations, Terraform can propose creating a duplicate.
+If this follows a token or role change, stop before apply and restore access;
+do not remove the existing state entry to work around missing permissions.
+The procedure below is for confirmed permanent deletion, not lost visibility.
+
 A pending ID can remain in state indefinitely when the server was deleted outside
 Terraform or is no longer visible to the configured token. Increasing a timeout
 cannot resolve a permanently missing server. The provider deliberately retains
