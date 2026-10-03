@@ -1,11 +1,12 @@
 # Releases and installation
 
-## Install v0.1.1 from GitHub Releases
+## Install v0.1.2 from GitHub Releases
 
-Download your platform's ZIP and `terraform-provider-crafty_0.1.1_SHA256SUMS`
-from [the v0.1.1 release](https://github.com/bart-kochanowicz/terraform-provider-crafty/releases/tag/v0.1.1).
-Version v0.1.1 is published on GitHub and in Terraform Registry. For normal online
-installation, require `bart-kochanowicz/crafty` version `0.1.1` and run
+Download your platform's ZIP and `terraform-provider-crafty_0.1.2_SHA256SUMS`
+from [the v0.1.2 release](https://github.com/bart-kochanowicz/terraform-provider-crafty/releases/tag/v0.1.2).
+Version v0.1.2 is prepared for publication; the download links and Registry
+installation below become available after the Release workflow succeeds and
+Registry ingestion completes. For normal online installation, require `bart-kochanowicz/crafty` version `0.1.2` and run
 `terraform init` without `-plugin-dir` or development overrides. The mirror steps
 below are an alternative for manually downloaded packages.
 
@@ -15,10 +16,10 @@ below are an alternative for manually downloaded packages.
 | macOS | `darwin` | `amd64` (Intel), `arm64` (Apple Silicon) |
 | Windows | `windows` | `amd64`, `arm64` |
 
-Archives use `terraform-provider-crafty_0.1.1_<os>_<arch>.zip` and contain
-`terraform-provider-crafty_v0.1.1` (with `.exe` on Windows) and the MIT `LICENSE`.
-Release assets also include `terraform-provider-crafty_0.1.1_manifest.json` and
-`terraform-provider-crafty_0.1.1_SHA256SUMS.sig`, a binary detached GPG signature.
+Archives use `terraform-provider-crafty_0.1.2_<os>_<arch>.zip` and contain
+`terraform-provider-crafty_v0.1.2` (with `.exe` on Windows) and the MIT `LICENSE`.
+Release assets also include `terraform-provider-crafty_0.1.2_manifest.json` and
+`terraform-provider-crafty_0.1.2_SHA256SUMS.sig`, a binary detached GPG signature.
 Checksums cover all six ZIPs and the manifest. Checksums alone do not authenticate
 downloads; Registry installation verifies the signature using the registered key.
 
@@ -27,7 +28,7 @@ downloads; Registry installation verifies the signature using the registered key
 Run in Bash or Zsh with `curl` and `unzip` installed:
 
 ```sh
-version=0.1.1
+version=0.1.2
 case "$(uname -s)" in
   Linux) os=linux ;;
   Darwin) os=darwin ;;
@@ -72,7 +73,7 @@ Use the architecture of your Terraform executable (usually `amd64`):
 
 ```powershell
 $ErrorActionPreference = 'Stop'
-$version = '0.1.1'
+$version = '0.1.2'
 $arch = 'amd64' # Change to arm64 for native ARM64 Terraform.
 $archive = "terraform-provider-crafty_${version}_windows_${arch}.zip"
 $checksums = "terraform-provider-crafty_${version}_SHA256SUMS"
@@ -101,7 +102,7 @@ terraform {
   required_providers {
     crafty = {
       source  = "bart-kochanowicz/crafty"
-      version = "0.1.1"
+      version = "0.1.2"
     }
   }
 }
@@ -168,7 +169,7 @@ For subsequent releases, review [the MIT License](../LICENSE), finalize the
 matching version entry in [the changelog](../CHANGELOG.md), and use the actual
 release date. Keep the Makefile's default VERSION, example
 version constraints, and installation guide aligned with the intended stable tag.
-The snapshot version comes from GoReleaser's metadata and may differ from 0.1.1
+The snapshot version comes from GoReleaser's metadata and may differ from 0.1.2
 when no stable tag exists. `make release-version-check` compares the intended
 stable version with both example constraints, installation commands, and a dated
 changelog entry. The tag workflow also rejects a tag that differs from that version
@@ -237,5 +238,5 @@ of the signed version. Registration alone does not make the unsigned v0.1.0 usab
 from Registry. Do not replace v0.1.0 binaries or move its tag.
 
 Registry ingestion and a fresh direct `terraform init` for 0.1.1 have been
-verified. Local mirror installation remains available as an alternative. See the
+verified. Repeat that verification for 0.1.2 after publication. Local mirror installation remains available as an alternative. See the
 [HashiCorp publishing requirements](https://developer.hashicorp.com/terraform/registry/providers/publishing).

@@ -8,6 +8,11 @@ Licensed under the [MIT License](LICENSE). Release archives include the license 
 
 ## Start here
 
+Version **0.1.2 is prepared for publication**. The Registry quickstart and example
+constraints in this checkout target 0.1.2 and require its publication first.
+Until then, use the `v0.1.1` checkout to test the published release, or follow
+the source-build instructions below to test the fix locally.
+
 To try the published provider on a disposable local Crafty instance, follow the
 [local quickstart](#local-quickstart). For an existing Crafty instance, use
 [Registry installation](#install-a-release). To modify the provider itself, see
@@ -92,7 +97,7 @@ terraform plan
 terraform apply
 ```
 
-Terraform should install **bart-kochanowicz/crafty v0.1.1** with a developer
+Terraform should install **bart-kochanowicz/crafty v0.1.2** with a developer
 signature (`self-signed`). This is expected for a community provider. The CLI
 configuration is local to this checkout and leaves `~/.terraformrc` unchanged.
 A development-override warning is unexpected on this path; check that
@@ -151,7 +156,9 @@ Do not use a global Docker prune or delete state to reset this test.
 
 ## Install a release
 
-Version **0.1.1** is published in [Terraform Registry](https://registry.terraform.io/providers/bart-kochanowicz/crafty/0.1.1).
+Version **0.1.2** is prepared for publication. After it appears in
+[Terraform Registry](https://registry.terraform.io/providers/bart-kochanowicz/crafty/0.1.2),
+use the examples below. The currently published version is 0.1.1.
 For an existing Crafty instance, use a fresh checkout, configure its URL and token,
 and initialize the example without a local mirror:
 
@@ -194,7 +201,7 @@ terraform apply
 ```
 
 Replace the URL and use your instance's API key. `make install` copies version
-0.1.1 to Terraform's local plugin directory for the current OS and architecture.
+0.1.2 to Terraform's local plugin directory for the current OS and architecture.
 The explicit plugin directory restricts initialization to that mirror. Use a fresh
 example directory; do not reuse state or a lock file from another build. Retain
 state for subsequent management and restore these environment variables in later
@@ -216,9 +223,11 @@ visibility of the new server.
 resource:** after three missing observations, a plan may propose creating a server
 that already exists. If this happens after changing a token or roles, stop before
 apply, restore the original full-access token/account access, and run plan again.
-The current source fixes this behavior: three missing observations cause a read
+Version 0.1.2 fixes this behavior: three missing observations cause a read
 error and preserve the existing state instead of proposing a duplicate. This fix
-is not included in the published 0.1.1 provider.
+is not included in the published 0.1.1 provider. After independently confirming
+real deletion, back up state and remove only the affected resource from state
+before recreating it; automatic recreation after collection absence is disabled.
 
 Do not use state removal as a workaround for lost visibility. The pending-state
 recovery procedure applies only after confirming real deletion.
