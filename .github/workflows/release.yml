@@ -35,6 +35,10 @@ jobs:
             echo "Select and commit LICENSE before publishing the initial release." >&2
             exit 1
           fi
+      - name: Check release version and prepare release notes
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python3 dev/release_version.py --tag "$RELEASE_TAG" --notes-output "$RUNNER_TEMP/release-notes.md"
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
@@ -53,6 +57,6 @@ jobs:
         with:
           distribution: goreleaser
           version: v2.15.0
-          args: release --clean
+          args: release --clean --release-notes ${{ runner.temp }}/release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

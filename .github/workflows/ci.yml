@@ -48,7 +48,7 @@ jobs:
           terraform_version: 1.16.4
           terraform_wrapper: false
       - name: Verify dependencies and generated documentation
-        run: make deps-check docs-check
+        run: make deps-check docs-check release-version-check
       - uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
