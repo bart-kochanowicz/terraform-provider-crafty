@@ -216,6 +216,10 @@ visibility of the new server.
 resource:** after three missing observations, a plan may propose creating a server
 that already exists. If this happens after changing a token or roles, stop before
 apply, restore the original full-access token/account access, and run plan again.
+The current source fixes this behavior: three missing observations cause a read
+error and preserve the existing state instead of proposing a duplicate. This fix
+is not included in the published 0.1.1 provider.
+
 Do not use state removal as a workaround for lost visibility. The pending-state
 recovery procedure applies only after confirming real deletion.
 See [verification results and remaining scope](docs/verification.md).
@@ -258,7 +262,7 @@ See [the resource guide](docs/resources/minecraft_server.md) for an example and 
 ## API scope and specification limitations
 
 - POST `/api/v2/servers` creates a Minecraft Java server using `minecraft_java` and `download_jar`.
-- GET `/api/v2/servers` reads visible server objects and finds the server by ID. Crafty 4.10.4 also returns server objects from single GET, contrary to the specification's role schema; the provider retains collection reads because single GET uses ambiguous HTTP 400 `NOT_AUTHORIZED` for a missing ID. Three consecutive successful collection responses without an established server remove it from Terraform state. A server whose post-create/update refresh is pending retains its ID while preparation or API recovery continues. A collection 404 is an endpoint error, not proof that the server was deleted.
+- GET `/api/v2/servers` reads visible server objects and finds the server by ID. Crafty 4.10.4 also returns server objects from single GET, contrary to the specification's role schema; the provider retains collection reads because single GET uses ambiguous HTTP 400 `NOT_AUTHORIZED` for a missing ID. Three consecutive successful collection responses without an established server cause a read error and preserve Terraform state. An empty or filtered collection cannot distinguish deletion from lost token access. A server whose post-create/update refresh is pending retains its ID while preparation or API recovery continues. A collection 404 is an endpoint error, not proof that the server was deleted.
 - PATCH `/api/v2/servers/{serverID}` updates name, automatic start, monitoring address/port, and launch command without replacing the ID. Only changed, known settings are sent; an explicit `false` is preserved. There is no documented PUT operation.
 - DELETE `/api/v2/servers/{serverID}` deletes the server. HTTP 404 is treated as already deleted.
 - HTTP 401/403, other non-success HTTP statuses, malformed JSON, and application-level unsuccessful statuses become English Terraform diagnostics.
