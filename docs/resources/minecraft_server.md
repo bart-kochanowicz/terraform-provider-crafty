@@ -148,7 +148,8 @@ replaced merely because a pending read timed out. The check confirms complete AP
 metadata and requested settings, not Minecraft startup or download success.
 
 An accepted configuration PATCH similarly saves desired settings and existing
-computed values before polling all changed fields for convergence. An accepted delete polls for absence; a failed verification
+computed values before polling all changed fields for convergence. An accepted
+delete requires three consecutive successful list responses without the ID; reappearance or a read error resets that count. A failed verification
 returns an error while preserving identity for a later destroy. DELETE 404 remains
 idempotent. Established-resource reads retain state on API errors and require three
 consecutive successful absences before removing state.
@@ -156,5 +157,45 @@ consecutive successful absences before removing state.
 POST, PATCH, and DELETE are never automatically replayed. A lost create response
 without an ID cannot be reconciled safely: inspect the panel before retrying to
 avoid duplicate servers.
+
+### Resolving a server that stays pending
+
+A pending ID can remain in state indefinitely when the server was deleted outside
+Terraform or is no longer visible to the configured token. Increasing a timeout
+cannot resolve a permanently missing server. The provider deliberately retains
+this ID rather than risking another POST while creation or access is uncertain.
+
+1. Confirm the Terraform workspace, Crafty URL, token permissions, and the saved
+   server ID. Check that ID in the correct panel using an account with sufficient
+   access; an empty collection or single-GET `NOT_AUTHORIZED` alone does not prove
+   deletion. Wait for background preparation if it is still running.
+2. If the server exists, restore API access or allow preparation to finish, then
+   run `terraform plan` and review any settings reconciliation before applying.
+   Keep its existing state entry.
+3. Only after confirming permanent deletion, coordinate with other users of the
+   state and save a private state backup outside the repository. For example,
+   replace `/secure/location` below with an existing private backup directory:
+
+   ```sh
+   umask 077
+   terraform state pull > /secure/location/crafty-state-backup.json
+   ```
+
+   Confirm the backup was written successfully. Terraform state can contain secrets.
+4. Identify the exact resource instance with `terraform state list`. Preview and
+   then remove only that instance from state; substitute its actual address if it
+   is in a module or uses `count`/`for_each`:
+
+   ```sh
+   terraform state rm -dry-run 'crafty_minecraft_server.example'
+   terraform state rm 'crafty_minecraft_server.example'
+   terraform plan
+   ```
+
+   State removal forgets the ID without deleting anything in Crafty. If the resource
+   remains in configuration, the next plan proposes a new server and directory.
+   Review that plan before applying; it will not restore or reuse the retained
+   world directory. If no replacement is wanted, remove the resource configuration
+   before applying. Do not forget a server that still exists merely to clear a warning.
 
 The provider does not start the server, accept the Minecraft EULA, or modify server files. Complete those steps in Crafty.

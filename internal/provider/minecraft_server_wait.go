@@ -66,10 +66,12 @@ func (s *serverResource) waitRefresh(ctx context.Context, m *serverModel, pendin
 
 func (s *serverResource) waitDeleted(ctx context.Context, m *serverModel) error {
 	// Read only identity here: a server with incomplete metadata still exists.
+	// Require three consecutive successful absences, as with established reads.
 	delay := s.pollInterval
 	if delay <= 0 {
 		delay = time.Second
 	}
+	missing := 0
 	for {
 		if err := ctx.Err(); err != nil {
 			return fmt.Errorf("waiting for deletion of %s: %w", m.ID.ValueString(), err)
@@ -83,11 +85,19 @@ func (s *serverResource) waitDeleted(ctx context.Context, m *serverModel) error 
 					break
 				}
 			}
-			if !found {
-				return nil
+			if found {
+				missing = 0
+			} else {
+				missing++
+				if missing >= 3 {
+					return nil
+				}
 			}
-		} else if !client.IsRetryableRead(err) {
-			return err
+		} else {
+			missing = 0
+			if !client.IsRetryableRead(err) {
+				return err
+			}
 		}
 		wait := delay
 		var api *client.APIError

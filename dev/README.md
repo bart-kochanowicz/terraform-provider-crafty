@@ -153,7 +153,10 @@ artifacts. A controlled HTTP server additionally verifies plan-only replacement
 for all six creation inputs without applying those changes. Other Terraform
 acceptance scenarios verify recovery after post-create/update failures, including
 a rejected initial settings PATCH, preserved private state, no taint,
-no duplicate POST, and empty plans after API recovery. A failure uploads an artifact
+no duplicate POST, and empty plans after API recovery. Further controlled scenarios
+verify that an ID pending after create or update survives repeated refreshes and
+plans when the server is subsequently deleted outside Terraform. They confirm
+that no replacement POST occurs and an explicit destroy remains idempotent. A failure uploads an artifact
 with the acceptance output (if the tests started), container logs, Compose status, and Crafty application logs. Artifacts
 are retained for seven days. Database files, credentials, and Terraform state are
 excluded. The final cleanup step runs even after failures and removes only that
