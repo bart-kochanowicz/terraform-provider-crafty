@@ -29,6 +29,12 @@ jobs:
             echo "Expected a stable version tag such as v0.1.0" >&2
             exit 1
           fi
+      - name: Require a maintainer-selected license
+        run: |
+          if [ ! -s LICENSE ]; then
+            echo "Select and commit LICENSE before publishing the initial release." >&2
+            exit 1
+          fi
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
@@ -41,6 +47,8 @@ jobs:
           go mod download
           go mod verify
           make test vet docs-check
+      - name: Verify release packages before publication
+        run: make release-snapshot
       - uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
