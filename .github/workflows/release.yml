@@ -4,17 +4,12 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Stable release tag matching the committed version (for example v0.1.2)'
-        required: true
-        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ inputs.tag || github.ref_name }}
+  group: release-publication
   cancel-in-progress: false
 
 jobs:
@@ -24,20 +19,21 @@ jobs:
     permissions:
       contents: write
       actions: read
-    env:
-      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Validate release tag
+      - name: Resolve release version and prepare notes
         shell: bash
         run: |
-          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Expected a stable version tag such as v0.1.0" >&2
-            exit 1
+          args=(--print-tag --notes-output "$RUNNER_TEMP/release-notes.md")
+          if [[ "$GITHUB_EVENT_NAME" == push ]]; then
+            args+=(--tag "$GITHUB_REF_NAME")
           fi
+          tag=$(python3 dev/release_version.py "${args[@]}")
+          echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
+          echo "Selected release: $tag at $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
       - name: Require green main CI for manual publication
         if: github.event_name == 'workflow_dispatch'
         env:
@@ -71,8 +67,6 @@ jobs:
             echo "Select and commit LICENSE before publishing the initial release." >&2
             exit 1
           fi
-      - name: Check release version and prepare release notes
-        run: python3 dev/release_version.py --tag "$RELEASE_TAG" --notes-output "$RUNNER_TEMP/release-notes.md"
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod

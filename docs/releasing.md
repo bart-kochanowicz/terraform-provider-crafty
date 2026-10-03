@@ -1,13 +1,12 @@
 # Releases and installation
 
-## Install v0.1.1 from GitHub Releases
+## Install from GitHub Releases
 
-Download your platform's ZIP and `terraform-provider-crafty_0.1.1_SHA256SUMS`
-from [the v0.1.1 release](https://github.com/bart-kochanowicz/terraform-provider-crafty/releases/tag/v0.1.1).
-Version v0.1.1 is published on GitHub and in Terraform Registry. For normal online
-installation, require `bart-kochanowicz/crafty` version `0.1.1` and run
-`terraform init` without `-plugin-dir` or development overrides. The mirror steps
-below are an alternative for manually downloaded packages.
+Choose a published stable version from [GitHub Releases](https://github.com/bart-kochanowicz/terraform-provider-crafty/releases).
+For normal online installation, use the version constraint shown below and run
+`terraform init` without `-plugin-dir` or development overrides. Terraform Registry
+must have ingested a version satisfying that constraint. The mirror steps below
+are an alternative for manually downloaded packages.
 
 | System | OS identifier | Architectures |
 | --- | --- | --- |
@@ -15,10 +14,10 @@ below are an alternative for manually downloaded packages.
 | macOS | `darwin` | `amd64` (Intel), `arm64` (Apple Silicon) |
 | Windows | `windows` | `amd64`, `arm64` |
 
-Archives use `terraform-provider-crafty_0.1.1_<os>_<arch>.zip` and contain
-`terraform-provider-crafty_v0.1.1` (with `.exe` on Windows) and the MIT `LICENSE`.
-Release assets also include `terraform-provider-crafty_0.1.1_manifest.json` and
-`terraform-provider-crafty_0.1.1_SHA256SUMS.sig`, a binary detached GPG signature.
+Archives use `terraform-provider-crafty_<version>_<os>_<arch>.zip` and contain
+`terraform-provider-crafty_v<version>` (with `.exe` on Windows) and the MIT `LICENSE`.
+Release assets also include `terraform-provider-crafty_<version>_manifest.json` and
+`terraform-provider-crafty_<version>_SHA256SUMS.sig`, a binary detached GPG signature.
 Checksums cover all six ZIPs and the manifest. Checksums alone do not authenticate
 downloads; Registry installation verifies the signature using the registered key.
 
@@ -27,7 +26,9 @@ downloads; Registry installation verifies the signature using the registered key
 Run in Bash or Zsh with `curl` and `unzip` installed:
 
 ```sh
-version=0.1.1
+printf 'Published version to install (without v): '
+read -r version
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid stable version"; exit 1; }
 case "$(uname -s)" in
   Linux) os=linux ;;
   Darwin) os=darwin ;;
@@ -72,7 +73,8 @@ Use the architecture of your Terraform executable (usually `amd64`):
 
 ```powershell
 $ErrorActionPreference = 'Stop'
-$version = '0.1.1'
+$version = Read-Host 'Published version to install (without v)'
+if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid stable version' }
 $arch = 'amd64' # Change to arm64 for native ARM64 Terraform.
 $archive = "terraform-provider-crafty_${version}_windows_${arch}.zip"
 $checksums = "terraform-provider-crafty_${version}_SHA256SUMS"
@@ -101,7 +103,7 @@ terraform {
   required_providers {
     crafty = {
       source  = "bart-kochanowicz/crafty"
-      version = "0.1.1"
+      version = "~> 0.1.2"
     }
   }
 }
@@ -166,13 +168,16 @@ Existing packages can be checked separately with `make release-verify`.
 
 For subsequent releases, review [the MIT License](../LICENSE), finalize the
 matching version entry in [the changelog](../CHANGELOG.md), and use the actual
-release date. Keep the Makefile's default VERSION, example
-version constraints, and installation guide aligned with the intended stable tag.
-The snapshot version comes from GoReleaser's metadata and may differ from 0.1.1
-when no stable tag exists. `make release-version-check` compares the intended
-stable version with both example constraints, installation commands, and a dated
-changelog entry. The tag workflow also rejects a tag that differs from that version
-and uses only that version's changelog entry as the GitHub release description.
+release date. The Makefile's default `VERSION` is the single source of the current
+release version. For a patch release, update it and add the dated changelog entry;
+compatible example constraints and installation commands need no version bump.
+Raise example minimum versions only when their usage requires a newer fix or
+feature. Commit application lock files and use `terraform init -upgrade` deliberately.
+
+`make release-version-check` validates the Makefile version and its finalized
+changelog entry. The tag-push workflow also rejects a tag that differs from that
+version and uses only that version's changelog entry as the release description.
+Snapshot versions derive from existing Git tags and can differ from `VERSION`.
 
 Check the required branch rules separately: CI execution alone does not prevent a
 merge. Require Lint, Tests and build, Crafty acceptance tests, both Terraform
@@ -181,9 +186,9 @@ or publication is created by the snapshot checks.
 
 After reviewing and committing the changes, merge the release commit into `main`
 and wait for its push CI (including Crafty acceptance tests) to pass. To authorize
-publication, open **Actions → Release → Run workflow**, select **main**, and enter
-the stable tag matching the committed version (for example `v0.1.2`). The workflow
-checks the selected commit's CI and version, verifies packages, imports the signing
+publication, open **Actions → Release → Run workflow**, select **main**, and run it.
+The workflow reads `VERSION` from the selected commit and derives its tag;
+there is no version input to maintain or copy. It checks the selected commit's CI and version, verifies packages, imports the signing
 key, then creates an annotated tag and publishes the signed release in the same
 run. You do not need to create or push a tag locally, or add a personal access token.
 The Registry's existing release webhook ingests the published provider.
@@ -237,5 +242,5 @@ of the signed version. Registration alone does not make the unsigned v0.1.0 usab
 from Registry. Do not replace v0.1.0 binaries or move its tag.
 
 Registry ingestion and a fresh direct `terraform init` for 0.1.1 have been
-verified. Local mirror installation remains available as an alternative. See the
+verified. Repeat that verification for each subsequent release after publication. Local mirror installation remains available as an alternative. See the
 [HashiCorp publishing requirements](https://developer.hashicorp.com/terraform/registry/providers/publishing).

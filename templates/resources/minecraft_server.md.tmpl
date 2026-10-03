@@ -127,7 +127,7 @@ avoid duplicate servers.
 
 Published provider 0.1.1 has an established-resource visibility limitation: a
 restricted key may receive an empty successful collection while the server still
-exists, allowing Terraform to propose a duplicate. The current source fixes this
+exists, allowing Terraform to propose a duplicate. Version 0.1.2 fixes this
 by returning a read error and retaining state after three missing observations.
 If visibility is lost after a token or role change, restore access; do not remove
 the existing state entry to work around missing permissions. The procedure below
