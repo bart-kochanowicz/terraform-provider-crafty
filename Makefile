@@ -3,6 +3,7 @@ VERSION ?= 0.1.0
 GOLANGCI_LINT ?= golangci-lint
 TERRAFORM ?= terraform
 DOCKER ?= docker
+PYTHON ?= python3
 DEV_COMPOSE := $(DOCKER) compose -f dev/compose.yml
 BINARY := terraform-provider-crafty
 PLATFORM := $(shell $(GO) env GOOS)_$(shell $(GO) env GOARCH)
@@ -23,7 +24,26 @@ fmt-check:
 lint:
 	$(GOLANGCI_LINT) run
 	$(GOLANGCI_LINT) fmt --diff --diff-colored=false
-check: fmt-check lint test vet build
+# Common checks are shared with CI; compatibility uses the selected Terraform CLI.
+check: check-core lint deps-check docs-check release-check test-acc-mock
+.PHONY: check-core deps-check test-python check-compose validate-examples test-acc-mock
+check-core: fmt-check test vet test-python check-compose validate-examples
+deps-check:
+	$(GO) mod download
+	$(GO) mod verify
+	$(GO) mod tidy
+	git diff --exit-code -- go.mod go.sum
+test-python:
+	$(PYTHON) -m unittest discover -s dev -p 'test_*.py'
+check-compose: dev-check
+	COMPOSE_PROJECT_NAME=crafty-provider-ci-validation $(DOCKER) compose -f dev/compose.yml -f dev/compose.ci.yml config --quiet
+validate-examples: dev-provider
+	TF_CLI_CONFIG_FILE="$(CURDIR)/bin/dev.tfrc" $(TERRAFORM) -chdir=examples/local validate
+	TF_CLI_CONFIG_FILE="$(CURDIR)/bin/dev.tfrc" $(TERRAFORM) -chdir=examples/docker validate
+# Only controlled HTTP scenarios: no Crafty instance, token, or download required.
+test-acc-mock:
+	@command -v "$(TERRAFORM)" >/dev/null
+	env -u TF_CLI_CONFIG_FILE TF_ACC=1 TF_ACC_TERRAFORM_PATH="$$(command -v "$(TERRAFORM)")" $(GO) test -v -race -count=1 -timeout 10m ./internal/provider -run '^TestAccMinecraftServer(PostCreateRecovery|InitialSettingsRecovery|PendingExternalDeletion|ReplacementPlans)$$'
 vet:
 	$(GO) vet ./...
 install: build
@@ -59,7 +79,7 @@ test-acc: dev-up
 # Use a fresh crafty-provider-ci-* project; removes only that project's volumes.
 .PHONY: test-acc-ci
 test-acc-ci:
-	TF_ACC_TERRAFORM_PATH="$$(command -v "$(TERRAFORM)")" GO="$(GO)" python3 dev/ci.py run
+	TF_ACC_TERRAFORM_PATH="$$(command -v "$(TERRAFORM)")" GO="$(GO)" $(PYTHON) dev/ci.py run
 
 # Tools run at pinned versions without changing the provider's module dependencies.
 # Allow tool-specific Go requirements even when CI sets GOTOOLCHAIN=local.

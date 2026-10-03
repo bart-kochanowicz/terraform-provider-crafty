@@ -43,6 +43,7 @@ The API client has no Terraform dependencies. The provider converts Terraform va
 - Go 1.25 or newer and Make.
 - Terraform 1.5 or newer.
 - golangci-lint v2.14.0 for `make fmt`, `make lint`, and `make check`.
+- Python 3 and Docker Compose 2.24.4 or newer for the full local `make check`.
 - Crafty Controller 4.10.4 (verified baseline) with a trusted TLS certificate and an API token with server creation, access, and configuration permissions.
 - A supported engine/version pair available in Crafty's download catalog.
 
@@ -154,7 +155,8 @@ GitHub Actions runs `.github/workflows/ci.yml` for pull requests, pushes to `mai
 
 - **Lint** uses golangci-lint **v2.14.0** with `errcheck`, `govet`, `ineffassign`, `staticcheck`, and `unused`. It also checks `gofmt` and `goimports` formatting.
 - **Crafty acceptance tests** starts the Docker Compose stack, waits for readiness, bootstraps an API key, verifies the recorded API contract, and runs the live Terraform lifecycle suite. It also publishes a contract report on success and failure. Failures upload redacted diagnostics, and cleanup removes the disposable containers and volumes. See [the CI integration guide](dev/README.md#integration-tests-in-github-actions).
-- **Tests and build** checks dependency integrity and whether `go mod tidy` changes tracked module files, checks Go and Terraform formatting, runs uncached tests with the race detector, runs `go vet`, builds the provider, and validates the Terraform example with a development override.
+- **Tests and build** checks dependency integrity and whether `go mod tidy` changes tracked module files, checks Go and Terraform formatting, runs uncached tests with the race detector, runs `go vet`, builds the provider, and validates both Terraform examples with a development override. Its core checks use the same `make check-core` target as local development.
+- **Terraform compatibility** validates both examples and runs the controlled Terraform recovery/replacement suite on **1.5.0** (the declared minimum) and **1.16.4**. These tests do not require Crafty; live API compatibility remains covered by the integration job.
 
 Install golangci-lint locally using Homebrew:
 
@@ -165,6 +167,6 @@ make fmt
 make check
 ```
 
-Use v2.14.0 for exact CI parity; see the [official installation instructions](https://golangci-lint.run/docs/welcome/install/local/) for version-specific binaries. `make fmt` updates Go import/formatting and Terraform examples. `make fmt-check` only checks formatting. `make lint` runs the configured analyzers and checks formatting. Override executable paths using `GO`, `GOLANGCI_LINT`, and `TERRAFORM` when needed.
+Use v2.14.0 for exact CI parity; see the [official installation instructions](https://golangci-lint.run/docs/welcome/install/local/) for version-specific binaries. `make fmt` updates Go import/formatting and Terraform examples. `make fmt-check` only checks formatting. `make lint` runs the configured analyzers and checks formatting. The full `make check` also covers module integrity/tidy, generated docs, release configuration, Python helpers, Compose configuration, example validation, and controlled Terraform acceptance. It does not start Crafty. Override executable paths using `GO`, `GOLANGCI_LINT`, `TERRAFORM`, `DOCKER`, and `PYTHON` when needed.
 
-To prevent merging failing changes, configure a GitHub branch ruleset for `main` and require the **Lint**, **Tests and build**, and **Crafty acceptance tests** status checks after their first workflow run. The workflow alone runs checks but does not enforce branch protection.
+To prevent merging failing changes, configure a GitHub branch ruleset for `main` and require the **Lint**, **Tests and build**, and **Crafty acceptance tests** status checks plus **Terraform compatibility (1.5.0)** and **Terraform compatibility (1.16.4)** after their first workflow run. The workflow alone runs checks but does not enforce branch protection.
