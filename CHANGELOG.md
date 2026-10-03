@@ -1,8 +1,7 @@
 # Changelog
 
-Initial release notes finalized on 2026-10-03. Publication is pending; the
-[GitHub release](https://github.com/bart-kochanowicz/terraform-provider-crafty/releases/tag/v0.1.0)
-is the source of truth for availability.
+The initial release was published on 2026-10-03. Download binaries and checksums
+from [GitHub Releases](https://github.com/bart-kochanowicz/terraform-provider-crafty/releases/tag/v0.1.0).
 
 ## 0.1.0 — 2026-10-03
 

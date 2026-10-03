@@ -4,7 +4,7 @@
 
 Download your platform's ZIP and `terraform-provider-crafty_0.1.0_SHA256SUMS`
 from [the v0.1.0 release](https://github.com/bart-kochanowicz/terraform-provider-crafty/releases/tag/v0.1.0).
-These assets become available when the release workflow successfully publishes the tag.
+Version v0.1.0 was published on 2026-10-03 with all six ZIPs and the checksum file.
 
 | System | OS identifier | Architectures |
 | --- | --- | --- |
@@ -157,10 +157,9 @@ checks the native binary's `-version` output against package metadata; other pla
 packaged but not executed. `Release snapshot` runs the same verification in PR CI.
 Existing packages can be checked separately with `make release-verify`.
 
-Before an initial public release, review [the MIT License](../LICENSE) and
-[the finalized 0.1.0 changelog](../CHANGELOG.md). Its date records preparation;
-publication remains a separate action. If publication happens on a later date,
-update the entry date and pre-publication notice before tagging. Keep the Makefile's default VERSION, example
+For subsequent releases, review [the MIT License](../LICENSE), finalize the
+matching version entry in [the changelog](../CHANGELOG.md), and use the actual
+release date. Keep the Makefile's default VERSION, example
 version constraints, and installation guide aligned with the intended stable tag.
 The snapshot version comes from GoReleaser's metadata and may differ from 0.1.0
 when no stable tag exists. `make release-version-check` compares the intended
@@ -179,8 +178,9 @@ wait for CI (including Crafty acceptance tests) to pass, then tag that commit:
 ```sh
 git checkout main
 git pull --ff-only
-git tag -a v0.1.0 -m 'Release v0.1.0'
-git push origin v0.1.0
+# v0.1.0 already exists; use the next reviewed version, for example v0.1.1.
+git tag -a v0.1.1 -m 'Release v0.1.1'
+git push origin v0.1.1
 ```
 
 `.github/workflows/release.yml` accepts stable `vMAJOR.MINOR.PATCH` tags, reruns unit

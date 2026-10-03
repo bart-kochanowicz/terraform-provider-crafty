@@ -145,10 +145,10 @@ Do not use a global Docker prune or delete state to reset this test.
 ## Install a release
 
 For prebuilt Linux, macOS and Windows binaries, checksum verification, and Terraform
-initialization, follow [the v0.1.0 installation guide](docs/releasing.md). That guide
-describes the intended release; check that its assets have actually been published
-before downloading. GitHub Releases and Terraform Registry publication are separate
-steps.
+initialization, follow [the v0.1.0 installation guide](docs/releasing.md).
+[Version v0.1.0 is available on GitHub Releases](https://github.com/bart-kochanowicz/terraform-provider-crafty/releases/tag/v0.1.0).
+Terraform Registry publication is a separate step; use the local mirror installation
+in the guide.
 
 ## Build and local installation
 
