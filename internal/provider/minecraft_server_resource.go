@@ -154,7 +154,7 @@ func (s *serverResource) Read(ctx context.Context, req resource.ReadRequest, r *
 		return
 	}
 	if !found {
-		r.State.RemoveResource(ctx)
+		r.Diagnostics.AddError("Minecraft server is not visible", fmt.Sprintf("Server %s remains in Terraform state. Check token permissions and confirm its status in Crafty before changing state.", m.ID.ValueString()))
 		return
 	}
 	r.Diagnostics.Append(r.State.Set(ctx, &m)...)

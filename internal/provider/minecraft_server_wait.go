@@ -13,9 +13,9 @@ const pendingRefreshKey = "pending_refresh"
 
 var errIncompleteServer = errors.New("server response is missing required name, automatic-start, monitoring, or execution-command fields")
 
-// waitRefresh only repeats GET requests. Three consecutive successful absences
-// confirm removal of an established resource; a newly created/pending resource
-// stays in state until it becomes visible or the operation times out.
+// waitRefresh only repeats GET requests. Collection absence cannot distinguish
+// deletion from lost token access. Established resources fail after three absences;
+// pending resources keep waiting for visibility until the operation times out.
 func (s *serverResource) waitRefresh(ctx context.Context, m *serverModel, pending bool, expected *client.UpdateServerRequest) (bool, error) {
 	delay := s.pollInterval
 	if delay <= 0 {
@@ -42,7 +42,7 @@ func (s *serverResource) waitRefresh(ctx context.Context, m *serverModel, pendin
 		} else if !found {
 			missing++
 			if !pending && missing >= 3 {
-				return false, nil
+				return false, fmt.Errorf("server %s is no longer visible to the configured token. Collection absence cannot confirm deletion; its ID remains in Terraform state to prevent duplicate creation. Check token permissions and inspect Crafty using an account with access. Only after independently confirming deletion, remove the resource from state with terraform state rm before recreating it", m.ID.ValueString())
 			}
 			observation = fmt.Errorf("server is not yet visible in the collection")
 		} else {
@@ -66,7 +66,7 @@ func (s *serverResource) waitRefresh(ctx context.Context, m *serverModel, pendin
 
 func (s *serverResource) waitDeleted(ctx context.Context, m *serverModel) error {
 	// Read only identity here: a server with incomplete metadata still exists.
-	// Require three consecutive successful absences, as with established reads.
+	// After an accepted DELETE, require three consecutive successful absences.
 	delay := s.pollInterval
 	if delay <= 0 {
 		delay = time.Second

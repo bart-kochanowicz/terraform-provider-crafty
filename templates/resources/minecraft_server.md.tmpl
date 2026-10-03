@@ -40,7 +40,7 @@ Verified Crafty 4.10.4 `download_jar` converts memory input `1/2` into JVM flags
 
 Creation uses POST `/api/v2/servers`; reads use GET `/api/v2/servers`; updates and deletion use PATCH and DELETE `/api/v2/servers/{serverID}`. Both GET endpoints return server objects in 4.10.4. The single-GET specification wrongly describes a role; the provider uses the collection because single GET returns ambiguous HTTP 400 `NOT_AUTHORIZED` after deletion.
 
-Name, automatic start, monitoring address/port, and execution command are updated in place. Other creation inputs are retained in Terraform state; GET does not reconstruct the complete original download payload, although it returns the execution command and current monitoring fields. GET refreshes all five mutable fields. Explicit optional settings are reconciled on apply; omitted settings adopt Crafty values. An established server missing from three consecutive successful list responses is removed from state. A server with a pending post-create/update refresh remains in state until its metadata can be read. DELETE 404 is treated as already deleted; a collection GET 404 remains an error.
+Name, automatic start, monitoring address/port, and execution command are updated in place. Other creation inputs are retained in Terraform state; GET does not reconstruct the complete original download payload, although it returns the execution command and current monitoring fields. GET refreshes all five mutable fields. Explicit optional settings are reconciled on apply; omitted settings adopt Crafty values. An established server missing from three consecutive successful list responses causes a read error and remains in state, because collection absence cannot distinguish deletion from lost token access. A server with a pending post-create/update refresh remains in state until its metadata can be read. DELETE 404 is treated as already deleted; a collection GET 404 remains an error.
 
 In verified 4.10.4, default DELETE removes the panel record and preserves world files. Replacement creates a new directory and does not reuse the old world. Back up server data, review plans, and clean up retained directories separately.
 
@@ -115,8 +115,9 @@ An accepted configuration PATCH similarly saves desired settings and existing
 computed values before polling all changed fields for convergence. An accepted
 delete requires three consecutive successful list responses without the ID; reappearance or a read error resets that count. A failed verification
 returns an error while preserving identity for a later destroy. DELETE 404 remains
-idempotent. Established-resource reads retain state on API errors and require three
-consecutive successful absences before removing state.
+idempotent. Established-resource reads retain state on API errors and report a read error after
+three consecutive successful absences. They never remove an ID based on collection
+absence, which can also mean lost token access.
 
 POST, PATCH, and DELETE are never automatically replayed. A lost create response
 without an ID cannot be reconciled safely: inspect the panel before retrying to
@@ -124,14 +125,16 @@ avoid duplicate servers.
 
 ### Resolving a server that stays pending
 
-Version 0.1.1 also has an established-resource visibility limitation: a restricted
-key may receive an empty successful collection while the server still exists.
-After three missing observations, Terraform can propose creating a duplicate.
-If this follows a token or role change, stop before apply and restore access;
-do not remove the existing state entry to work around missing permissions.
-The procedure below is for confirmed permanent deletion, not lost visibility.
+Published provider 0.1.1 has an established-resource visibility limitation: a
+restricted key may receive an empty successful collection while the server still
+exists, allowing Terraform to propose a duplicate. The current source fixes this
+by returning a read error and retaining state after three missing observations.
+If visibility is lost after a token or role change, restore access; do not remove
+the existing state entry to work around missing permissions. The procedure below
+is for confirmed permanent deletion, not lost visibility.
 
-A pending ID can remain in state indefinitely when the server was deleted outside
+A saved ID (including an established server) can remain in state indefinitely
+when the server was deleted outside
 Terraform or is no longer visible to the configured token. Increasing a timeout
 cannot resolve a permanently missing server. The provider deliberately retains
 this ID rather than risking another POST while creation or access is uncertain.

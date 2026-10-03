@@ -179,15 +179,17 @@ func TestPendingCreateSurvivesReadTimeoutAndRecovers(t *testing.T) {
 	}
 }
 
-func TestReadRetriesBeforeRemovingState(t *testing.T) {
+func TestReadRetainsStateWhenVisibilityIsLost(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
 		visible   bool
 		status    int
 		wantError bool
+		filtered  bool
 	}{
-		{"temporary absence", true, 0, false}, {"confirmed absence", false, 0, false},
-		{"transient unavailable", false, 503, true}, {"collection 404", false, 404, true}, {"unauthorized", false, 401, true},
+		{"temporary absence", true, 0, false, false}, {"lost access with empty collection", false, 0, true, false},
+		{"lost access with other visible servers", false, 0, true, true},
+		{"transient unavailable", false, 503, true, false}, {"collection 404", false, 404, true, false}, {"unauthorized", false, 401, true, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var gets atomic.Int32
@@ -199,6 +201,8 @@ func TestReadRetriesBeforeRemovingState(t *testing.T) {
 				}
 				if tc.visible && n >= 3 {
 					writeServer(w, "original")
+				} else if tc.filtered {
+					_, _ = w.Write([]byte(`{"status":"ok","data":[{"server_id":"other"}]}`))
 				} else {
 					_, _ = w.Write([]byte(`{"status":"ok","data":[]}`))
 				}
@@ -211,17 +215,16 @@ func TestReadRetriesBeforeRemovingState(t *testing.T) {
 			if response.Diagnostics.HasError() != tc.wantError {
 				t.Fatal(response.Diagnostics)
 			}
-			if tc.visible || tc.wantError {
-				assertServerID(t, response.State)
-			} else if !response.State.Raw.IsNull() {
-				t.Fatal("confirmed deletion did not remove state")
+			assertServerID(t, response.State)
+			if tc.wantError && !response.State.Raw.Equal(state.Raw) {
+				t.Fatal("read changed state while visibility was unresolved")
 			}
 			if tc.status == 401 || tc.status == 404 {
 				if gets.Load() != 1 {
 					t.Fatal("permanent failure retried")
 				}
 			} else if gets.Load() < 3 {
-				t.Fatal("read did not confirm absence or retry")
+				t.Fatal("read did not retry")
 			}
 		})
 	}
