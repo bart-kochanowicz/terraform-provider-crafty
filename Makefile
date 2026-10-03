@@ -85,7 +85,7 @@ test-acc-ci:
 # Allow tool-specific Go requirements even when CI sets GOTOOLCHAIN=local.
 TFPLUGINDOCS_VERSION := v0.25.0
 GORELEASER_VERSION := v2.15.0
-.PHONY: docs docs-check release-check release-snapshot
+.PHONY: docs docs-check release-check release-snapshot release-verify
 docs:
 	GOTOOLCHAIN=auto $(GO) run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@$(TFPLUGINDOCS_VERSION) generate --provider-name crafty
 docs-check: docs
@@ -95,3 +95,6 @@ release-check:
 	GOTOOLCHAIN=auto $(GO) run github.com/goreleaser/goreleaser/v2@$(GORELEASER_VERSION) check
 release-snapshot: release-check
 	GOTOOLCHAIN=auto $(GO) run github.com/goreleaser/goreleaser/v2@$(GORELEASER_VERSION) release --snapshot --clean
+	$(MAKE) release-verify
+release-verify:
+	$(PYTHON) dev/verify_release.py --terraform "$(TERRAFORM)"

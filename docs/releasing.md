@@ -142,12 +142,32 @@ Before tagging:
 
 ```sh
 make docs
-make test vet release-snapshot
+make check
+make release-snapshot
 ```
 
 `release-snapshot` creates all six ZIPs and SHA-256 checksums in `dist/`, without
 publishing. Snapshot versions differ from stable versions. The GoReleaser linker
-flags embed the release version in the provider metadata.
+flags embed the release version in the provider metadata. The snapshot target
+also runs `make release-verify`: it checks the exact six platform archives,
+SHA-256 coverage and contents, then installs the native archive into a temporary
+provider mirror. Terraform init, validate, and schema export run in a fresh
+configuration without Crafty credentials or development overrides. The smoke test
+checks the native binary's `-version` output against package metadata; other platform binaries are
+packaged but not executed. `Release snapshot` runs the same verification in PR CI.
+Existing packages can be checked separately with `make release-verify`.
+
+Before an initial public release, select and commit the project's LICENSE, review
+[the changelog](../CHANGELOG.md), and replace its planned/unreleased heading with
+the actual version and release date. Keep the Makefile's default VERSION, example
+version constraints, and installation guide aligned with the intended stable tag.
+The snapshot version comes from GoReleaser's metadata and may differ from 0.1.0
+when no stable tag exists.
+
+Check the required branch rules separately: CI execution alone does not prevent a
+merge. Require Lint, Tests and build, Crafty acceptance tests, both Terraform
+compatibility jobs, and Release snapshot before preparing a release tag. No tag
+or publication is created by the snapshot checks.
 
 After reviewing and committing the changes, merge the release commit into `main`,
 wait for CI (including Crafty acceptance tests) to pass, then tag that commit:
@@ -160,8 +180,10 @@ git push origin v0.1.0
 ```
 
 `.github/workflows/release.yml` accepts stable `vMAJOR.MINOR.PATCH` tags, reruns unit
-tests, vet and the documentation check, and publishes the ZIPs and checksum file
+tests, vet and the documentation check, verifies a complete snapshot and native
+installation before publication, and publishes the ZIPs and checksum file
 using the built-in `GITHUB_TOKEN` with job-scoped `contents: write` permission.
-No additional release secret is required. Verify all six assets on the GitHub
+The publication job requires a committed, non-empty LICENSE. No additional release
+secret is required. Verify all six assets on the GitHub
 release and perform installation in a fresh Terraform directory. Failed publication
 can be rerun after resolving its cause; do not move a published version tag.
