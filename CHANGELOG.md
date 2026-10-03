@@ -3,6 +3,14 @@
 The initial release was published on 2026-10-03. Download binaries and checksums
 from [GitHub Releases](https://github.com/bart-kochanowicz/terraform-provider-crafty/releases/tag/v0.1.0).
 
+## 0.1.1 — 2026-10-03
+
+- Add Terraform Registry manifest declaring provider protocol 6.0.
+- Sign SHA-256 checksums with GPG and include the manifest in checksum coverage.
+- Verify the detached signature and native installation before publishing the draft release.
+- No provider resource behavior changes. This version is prepared for publication;
+  Registry availability still depends on successful ingestion.
+
 ## 0.1.0 — 2026-10-03
 
 ### Provider capabilities

@@ -2,12 +2,16 @@
 
 import hashlib
 import json
+import os
 from pathlib import Path
 import tempfile
+import shutil
+import subprocess
 import unittest
+from unittest.mock import patch
 import zipfile
 
-from verify_release import PLATFORMS, PROVIDER, verify_archives
+from verify_release import PLATFORMS, PROVIDER, verify_archives, verify_signature
 
 
 class ReleaseArchiveTest(unittest.TestCase):
@@ -15,6 +19,9 @@ class ReleaseArchiveTest(unittest.TestCase):
         version = "0.1.0-SNAPSHOT"
         (directory / "metadata.json").write_text(json.dumps({"version": version}))
         lines = []
+        manifest = directory / f"{PROVIDER}_{version}_manifest.json"
+        manifest.write_text(json.dumps({"version": 1, "metadata": {"protocol_versions": ["6.0"]}}))
+        lines.append(hashlib.sha256(manifest.read_bytes()).hexdigest() + "  " + manifest.name)
         for system, arch in sorted(PLATFORMS):
             archive = directory / f"{PROVIDER}_{version}_{system}_{arch}.zip"
             binary = f"{PROVIDER}_v{version}" + (".exe" if system == "windows" else "")
@@ -31,6 +38,53 @@ class ReleaseArchiveTest(unittest.TestCase):
             directory = Path(temporary)
             version, _ = self.packages(directory)
             self.assertEqual(verify_archives(directory), version)
+
+    def test_manifest_requires_supported_protocol_and_matching_checksum(self):
+        for invalid in ("protocol", "checksum"):
+            with self.subTest(invalid=invalid), tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary)
+                version, _ = self.packages(directory)
+                manifest = directory / f"{PROVIDER}_{version}_manifest.json"
+                manifest.write_text(json.dumps({"version": 1, "metadata": {"protocol_versions": ["5.0" if invalid == "protocol" else "6.0"]}}, indent=2))
+                with self.assertRaisesRegex(RuntimeError, "Registry manifest"):
+                    verify_archives(directory)
+
+    def test_downloaded_release_requires_manifest_asset(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            version, _ = self.packages(directory)
+            (directory / f"{PROVIDER}_{version}_manifest.json").unlink()
+            with self.assertRaises(FileNotFoundError):
+                verify_archives(directory)
+
+    @unittest.skipUnless(shutil.which("gpg"), "GPG is needed for detached-signature integration tests")
+    def test_real_signature_rejects_wrong_key_missing_armor_and_modified_checksums(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            home = directory / "gnupg"
+            home.mkdir(mode=0o700)
+            with patch.dict(os.environ, {"GNUPGHOME": str(home)}):
+                try:
+                    subprocess.run(["gpg", "--batch", "--pinentry-mode", "loopback", "--passphrase", "", "--quick-generate-key", "Crafty test <test@example.invalid>", "rsa2048", "sign", "0"], capture_output=True, check=True, timeout=60)
+                    keys = subprocess.check_output(["gpg", "--batch", "--with-colons", "--list-keys"], text=True, stderr=subprocess.DEVNULL)
+                    fingerprint = next(line.split(":")[9] for line in keys.splitlines() if line.startswith("fpr:"))
+                    version, checksums = self.packages(directory)
+                    signature = Path(str(checksums) + ".sig")
+                    subprocess.run(["gpg", "--batch", "--no-armor", "--local-user", fingerprint, "--output", str(signature), "--detach-sign", str(checksums)], capture_output=True, check=True)
+                    verify_signature(directory, version, fingerprint)
+                    with self.assertRaisesRegex(RuntimeError, "unexpected signing key"):
+                        verify_signature(directory, version, "0" * 40)
+                    checksums.write_text(checksums.read_text() + "changed\n")
+                    with self.assertRaisesRegex(RuntimeError, "signature is invalid"):
+                        verify_signature(directory, version, fingerprint)
+                    signature.write_bytes(b"-----BEGIN PGP SIGNATURE-----")
+                    with self.assertRaisesRegex(RuntimeError, "ASCII armor"):
+                        verify_signature(directory, version, fingerprint)
+                    signature.unlink()
+                    with self.assertRaisesRegex(RuntimeError, "Missing SHASUMS"):
+                        verify_signature(directory, version, fingerprint)
+                finally:
+                    subprocess.run(["gpgconf", "--kill", "gpg-agent"], capture_output=True)
 
     def test_missing_platform_or_checksum_is_rejected(self):
         for missing in ("archive", "checksum", "duplicate checksum"):

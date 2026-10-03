@@ -1,10 +1,10 @@
 # Releases and installation
 
-## Install v0.1.0 from GitHub Releases
+## Install v0.1.1 from GitHub Releases
 
-Download your platform's ZIP and `terraform-provider-crafty_0.1.0_SHA256SUMS`
-from [the v0.1.0 release](https://github.com/bart-kochanowicz/terraform-provider-crafty/releases/tag/v0.1.0).
-Version v0.1.0 was published on 2026-10-03 with all six ZIPs and the checksum file.
+Download your platform's ZIP and `terraform-provider-crafty_0.1.1_SHA256SUMS`
+from [the v0.1.1 release](https://github.com/bart-kochanowicz/terraform-provider-crafty/releases/tag/v0.1.1).
+Version v0.1.1 is prepared for publication; these assets appear after the tag workflow succeeds.
 
 | System | OS identifier | Architectures |
 | --- | --- | --- |
@@ -12,16 +12,19 @@ Version v0.1.0 was published on 2026-10-03 with all six ZIPs and the checksum fi
 | macOS | `darwin` | `amd64` (Intel), `arm64` (Apple Silicon) |
 | Windows | `windows` | `amd64`, `arm64` |
 
-Archives use `terraform-provider-crafty_0.1.0_<os>_<arch>.zip` and contain
-`terraform-provider-crafty_v0.1.0` (with `.exe` on Windows) and the MIT `LICENSE`.
-SHA-256 checksums detect damaged or mismatched downloads; they are not signatures.
+Archives use `terraform-provider-crafty_0.1.1_<os>_<arch>.zip` and contain
+`terraform-provider-crafty_v0.1.1` (with `.exe` on Windows) and the MIT `LICENSE`.
+Release assets also include `terraform-provider-crafty_0.1.1_manifest.json` and
+`terraform-provider-crafty_0.1.1_SHA256SUMS.sig`, a binary detached GPG signature.
+Checksums cover all six ZIPs and the manifest. Checksums alone do not authenticate
+downloads; Registry installation verifies the signature using the registered key.
 
 ### Linux and macOS
 
 Run in Bash or Zsh with `curl` and `unzip` installed:
 
 ```sh
-version=0.1.0
+version=0.1.1
 case "$(uname -s)" in
   Linux) os=linux ;;
   Darwin) os=darwin ;;
@@ -66,7 +69,7 @@ Use the architecture of your Terraform executable (usually `amd64`):
 
 ```powershell
 $ErrorActionPreference = 'Stop'
-$version = '0.1.0'
+$version = '0.1.1'
 $arch = 'amd64' # Change to arm64 for native ARM64 Terraform.
 $archive = "terraform-provider-crafty_${version}_windows_${arch}.zip"
 $checksums = "terraform-provider-crafty_${version}_SHA256SUMS"
@@ -95,7 +98,7 @@ terraform {
   required_providers {
     crafty = {
       source  = "bart-kochanowicz/crafty"
-      version = "0.1.0"
+      version = "0.1.1"
     }
   }
 }
@@ -125,8 +128,9 @@ release in a fresh example directory or deliberately regenerate its provider loc
 Commit the resulting `.terraform.lock.hcl` for repeatable installation.
 
 GitHub Releases installation does not require a Terraform Registry listing.
-Registry publication is a separate maintainer task requiring provider registration,
-a signing key and signed checksums; this workflow does not claim to publish there.
+Registry publication requires provider registration and the matching public signing
+key. The signed GitHub release triggers Registry ingestion through its webhook;
+a successful GitHub workflow alone does not confirm Registry availability.
 
 ## Maintainer workflow
 
@@ -161,7 +165,7 @@ For subsequent releases, review [the MIT License](../LICENSE), finalize the
 matching version entry in [the changelog](../CHANGELOG.md), and use the actual
 release date. Keep the Makefile's default VERSION, example
 version constraints, and installation guide aligned with the intended stable tag.
-The snapshot version comes from GoReleaser's metadata and may differ from 0.1.0
+The snapshot version comes from GoReleaser's metadata and may differ from 0.1.1
 when no stable tag exists. `make release-version-check` compares the intended
 stable version with both example constraints, installation commands, and a dated
 changelog entry. The tag workflow also rejects a tag that differs from that version
@@ -178,7 +182,7 @@ wait for CI (including Crafty acceptance tests) to pass, then tag that commit:
 ```sh
 git checkout main
 git pull --ff-only
-# v0.1.0 already exists; use the next reviewed version, for example v0.1.1.
+# Publish only after review, merge, green main CI and explicit release authorization.
 git tag -a v0.1.1 -m 'Release v0.1.1'
 git push origin v0.1.1
 ```
@@ -187,7 +191,41 @@ git push origin v0.1.1
 tests, vet and the documentation check, verifies a complete snapshot and native
 installation before publication, and publishes the ZIPs and checksum file
 using the built-in `GITHUB_TOKEN` with job-scoped `contents: write` permission.
-The publication job requires a committed, non-empty LICENSE. No additional release
-secret is required. Verify all six assets on the GitHub
+The publication job requires a committed, non-empty LICENSE and the
+`GPG_PRIVATE_KEY` GitHub Actions secret. Set `PASSPHRASE` only if the key is
+password-protected. The imported fingerprint selects the signing key. GoReleaser
+uploads a draft; signature and installation verification must pass before the
+workflow makes it public. A verification failure leaves the release as a draft. Verify all six assets on the GitHub
 release and perform installation in a fresh Terraform directory. Failed publication
 can be rerun after resolving its cause; do not move a published version tag.
+
+
+## Registry signing setup
+
+Use an RSA signing key; HashiCorp's Registry does not accept default ECC keys.
+Add its ASCII-armored public key in Registry signing-key settings and the matching
+private key as `GPG_PRIVATE_KEY` in GitHub repository Actions secrets. Never commit
+the private key or passphrase. The optional `PASSPHRASE` secret unlocks protected
+keys; an unprotected key does not need that secret.
+
+`make release-snapshot` explicitly skips signing. PR CI additionally signs a second
+snapshot with a disposable test key to exercise the real GoReleaser signing path.
+Snapshots never receive production signing secrets, including fork PRs. Both
+variants check the manifest and checksum coverage. To verify
+a signed build locally with its public key imported, run:
+
+```sh
+python3 dev/verify_release.py --source-manifest terraform-registry-manifest.json --require-signature --signing-fingerprint FULL_PUBLIC_KEY_FINGERPRINT
+```
+
+The manifest is a standalone asset, not part of the ZIP. Local GoReleaser builds
+checksum the repository manifest under its release asset name; downloaded releases
+must include the versioned manifest file as well as ZIPs, checksums and signature.
+Register `bart-kochanowicz/terraform-provider-crafty` in Registry and check ingestion
+of the signed version. Registration alone does not make the unsigned v0.1.0 usable
+from Registry. Do not replace v0.1.0 binaries or move its tag.
+
+Once Registry reports the new version, verify `terraform init` without a development
+override or `-plugin-dir` in a fresh configuration requiring version 0.1.1. Until
+then, local mirror installation remains available. See the
+[HashiCorp publishing requirements](https://developer.hashicorp.com/terraform/registry/providers/publishing).

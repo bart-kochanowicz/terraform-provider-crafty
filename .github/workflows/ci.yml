@@ -99,9 +99,34 @@ jobs:
         with:
           distribution: goreleaser
           version: v2.15.0
-          args: release --snapshot --clean
+          args: release --snapshot --clean --skip=sign
       - name: Verify packages and native Terraform installation
         run: make release-verify
+      - name: Create disposable snapshot signing key
+        id: snapshot-key
+        shell: bash
+        run: |
+          signing_home=$(mktemp -d)
+          chmod 700 "$signing_home"
+          export GNUPGHOME="$signing_home"
+          gpg --batch --pinentry-mode loopback --passphrase '' --quick-generate-key 'Crafty CI test <test@example.invalid>' rsa2048 sign 0
+          fingerprint=$(gpg --batch --with-colons --list-keys | awk -F: '$1 == "fpr" { print $10; exit }')
+          echo "home=$signing_home" >> "$GITHUB_OUTPUT"
+          echo "fingerprint=$fingerprint" >> "$GITHUB_OUTPUT"
+      - name: Build signed snapshot with disposable key
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: v2.15.0
+          args: release --snapshot --clean
+        env:
+          GNUPGHOME: ${{ steps.snapshot-key.outputs.home }}
+          GPG_FINGERPRINT: ${{ steps.snapshot-key.outputs.fingerprint }}
+      - name: Verify disposable signature and native installation
+        env:
+          GNUPGHOME: ${{ steps.snapshot-key.outputs.home }}
+          GPG_FINGERPRINT: ${{ steps.snapshot-key.outputs.fingerprint }}
+        run: python3 dev/verify_release.py --source-manifest terraform-registry-manifest.json --require-signature --signing-fingerprint "$GPG_FINGERPRINT"
 
   integration:
     name: Crafty acceptance tests

@@ -145,10 +145,11 @@ Do not use a global Docker prune or delete state to reset this test.
 ## Install a release
 
 For prebuilt Linux, macOS and Windows binaries, checksum verification, and Terraform
-initialization, follow [the v0.1.0 installation guide](docs/releasing.md).
+initialization, follow [the installation guide](docs/releasing.md).
 [Version v0.1.0 is available on GitHub Releases](https://github.com/bart-kochanowicz/terraform-provider-crafty/releases/tag/v0.1.0).
-Terraform Registry publication is a separate step; use the local mirror installation
-in the guide.
+Version 0.1.1 is prepared with Registry signing support; it is not yet published.
+Until the signed release is ingested by Registry, use the local mirror installation
+in the guide. For existing 0.1.0 downloads, use version 0.1.0 in those commands.
 
 ## Build and local installation
 
@@ -170,7 +171,7 @@ terraform apply
 ```
 
 Replace the URL and use your instance's API key. `make install` copies version
-0.1.0 to Terraform's local plugin directory for the current OS and architecture.
+0.1.1 to Terraform's local plugin directory for the current OS and architecture.
 The explicit plugin directory restricts initialization to that mirror. Use a fresh
 example directory; do not reuse state or a lock file from another build. Retain
 state for subsequent management and restore these environment variables in later

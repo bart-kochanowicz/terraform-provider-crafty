@@ -1,5 +1,5 @@
 GO ?= go
-VERSION ?= 0.1.0
+VERSION ?= 0.1.1
 GOLANGCI_LINT ?= golangci-lint
 TERRAFORM ?= terraform
 DOCKER ?= docker
@@ -96,7 +96,7 @@ release-version-check:
 release-check: release-version-check
 	GOTOOLCHAIN=auto $(GO) run github.com/goreleaser/goreleaser/v2@$(GORELEASER_VERSION) check
 release-snapshot: release-check
-	GOTOOLCHAIN=auto $(GO) run github.com/goreleaser/goreleaser/v2@$(GORELEASER_VERSION) release --snapshot --clean
+	GOTOOLCHAIN=auto $(GO) run github.com/goreleaser/goreleaser/v2@$(GORELEASER_VERSION) release --snapshot --clean --skip=sign
 	$(MAKE) release-verify
 release-verify:
-	$(PYTHON) dev/verify_release.py --terraform "$(TERRAFORM)"
+	$(PYTHON) dev/verify_release.py --terraform "$(TERRAFORM)" --source-manifest terraform-registry-manifest.json
