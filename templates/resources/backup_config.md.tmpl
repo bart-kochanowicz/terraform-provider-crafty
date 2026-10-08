@@ -1,0 +1,28 @@
+---
+page_title: "crafty_backup_config Resource"
+description: "Manage an existing Crafty backup policy."
+---
+
+# crafty_backup_config
+
+Manage an existing backup policy, including the default policy, using a token
+with server BACKUP permission. Crafty's creation API does not return the new ID,
+so this resource requires a policy that already exists.
+
+{{ tffile "examples/resources/crafty_backup_config/resource.tf" }}
+
+{{ .SchemaMarkdown }}
+
+Only explicitly configured settings are updated. Omitted settings adopt current
+Crafty values; removing a setting from configuration stops enforcing it.
+Changing `backup_location` requires a superuser and does not move existing archives.
+
+Refresh never runs or restores a backup. Missing policies and API errors preserve
+state and report an error. Destroy only stops managing the policy; it preserves
+its settings, associated schedules and archives.
+
+## Import
+
+```sh
+terraform import crafty_backup_config.daily SERVER_ID/BACKUP_ID
+```

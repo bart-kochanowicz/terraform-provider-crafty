@@ -3,6 +3,10 @@
 The initial release was published on 2026-10-03. Download binaries and checksums
 from [GitHub Releases](https://github.com/bart-kochanowicz/terraform-provider-crafty/releases/tag/v0.1.0).
 
+## 0.1.7 — 2026-10-08
+
+- Add `crafty_backup_config` to manage existing backup policies by ID, with import and drift detection. Destroy preserves the policy, settings, and archives.
+
 ## 0.1.6 — 2026-10-08
 
 - Add `crafty_schedule` for independent recurring interval/cron tasks, with import and configuration updates. Creation requires enabled tasks; read errors preserve state.
