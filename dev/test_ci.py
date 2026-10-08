@@ -67,6 +67,15 @@ class IntegrationTest(unittest.TestCase):
         logs.assert_called_once()
         down.assert_called_once()
 
+    def test_passes_selected_baseline_to_contract_guard(self):
+        runner = self.runner()
+        with patch.dict(os.environ, {"CRAFTY_TEST_BASELINE": "9.8.7"}):
+            with patch.object(runner, "token", return_value="token"), patch.object(runner, "api"):
+                with patch("ci.verify_contract", side_effect=RuntimeError("stop before acceptance")) as contract:
+                    with self.assertRaisesRegex(RuntimeError, "stop before acceptance"):
+                        runner.test()
+        contract.assert_called_once_with(runner, "token", "9.8.7")
+
     def test_reports_failures_before_contract(self):
         for stage in ("startup", "bootstrap", "precheck"):
             with self.subTest(stage=stage), tempfile.TemporaryDirectory() as directory:
@@ -102,7 +111,7 @@ class IntegrationTest(unittest.TestCase):
             process.stdout = ["secret-token acceptance failed\n"]
             process.wait.return_value = 1
             runner.mask("secret-token")
-            def passed_contract(runner, token):
+            def passed_contract(runner, token, baseline):
                 ci.write_report(runner, {"result": "passed", "stage": "complete"})
             with patch.object(runner, "token", return_value="secret-token"), patch.object(runner, "api"):
                 with patch("ci.verify_contract", side_effect=passed_contract), patch("ci.subprocess.Popen", return_value=process):

@@ -104,7 +104,7 @@ func (s *serverResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 }
 
-// Crafty 4.10.4 returns server objects from both GET endpoints. The provider
+// Crafty returns server objects from both GET endpoints. The provider
 // uses the collection to reconcile IDs; missing single GET returns ambiguous
 // HTTP 400 NOT_AUTHORIZED rather than a reliable not-found status.
 func (s *serverResource) refresh(ctx context.Context, m *serverModel) (bool, error) {
@@ -291,5 +291,5 @@ var _ resource.ResourceWithImportState = (*serverResource)(nil)
 
 // ID-only import cannot recover required download metadata from the verified API.
 func (s *serverResource) ImportState(_ context.Context, _ resource.ImportStateRequest, r *resource.ImportStateResponse) {
-	r.Diagnostics.AddError("Import unavailable for the verified API", "Crafty 4.10.4 GET does not reconstruct the required engine, version, original memory inputs, and server.properties port. Import by ID is unavailable; the provider will not guess these values from filenames or arbitrary execution commands. No server was modified.")
+	r.Diagnostics.AddError("Import unavailable for the verified API", "Verified Crafty GET responses do not reconstruct the required engine, version, original memory inputs, and server.properties port. Import by ID is unavailable; the provider will not guess these values from filenames or arbitrary execution commands. No server was modified.")
 }

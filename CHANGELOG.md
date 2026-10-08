@@ -3,6 +3,12 @@
 The initial release was published on 2026-10-03. Download binaries and checksums
 from [GitHub Releases](https://github.com/bart-kochanowicz/terraform-provider-crafty/releases/tag/v0.1.0).
 
+## 0.1.3 — 2026-10-08
+
+- Verify Crafty 4.11.0 compatibility, make it the default development image, and test both recorded versions in CI.
+- Discover contract fixtures automatically and keep provider code and descriptions independent of version lists.
+- Use one pinned Terraform version in CI; remove the legacy compatibility matrix.
+
 ## 0.1.2 — 2026-10-03
 
 - Preserve established Minecraft server IDs and all existing Terraform state when the configured token no longer sees a server. Three consecutive successful collection responses without its ID now return a read error instead of allowing a duplicate create.

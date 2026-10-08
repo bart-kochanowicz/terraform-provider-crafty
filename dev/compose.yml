@@ -2,7 +2,7 @@ name: crafty-provider-dev
 
 services:
   crafty:
-    image: ${CRAFTY_IMAGE:-registry.gitlab.com/crafty-controller/crafty-4:4.10.4}
+    image: ${CRAFTY_IMAGE:-registry.gitlab.com/crafty-controller/crafty-4:4.11.0}
     environment:
       TZ: Europe/Warsaw
     ports:

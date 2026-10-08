@@ -1,10 +1,10 @@
 # Local Crafty integration environment
 
-This Docker Compose stack runs a disposable Crafty installation for provider development. It uses the [official Crafty image](https://docs.craftycontrol.com/pages/getting-started/installation/docker/), which supports ARM64 and AMD64. Crafty is pinned to 4.10.4; set `CRAFTY_IMAGE` to test another official tag or digest.
+This Docker Compose stack runs a disposable Crafty installation for provider development. It uses the [official Crafty image](https://docs.craftycontrol.com/pages/getting-started/installation/docker/), which supports ARM64 and AMD64. The default image is pinned in [`compose.yml`](compose.yml); set `CRAFTY_IMAGE` to test another official tag or digest.
 
 For a first run with a fresh checkout, isolated volumes, and a complete manual
 create/update/destroy walkthrough, start with the [README quickstart](../README.md#local-quickstart).
-The README path installs published 0.1.1 from Registry. The development-override
+The README path installs the published provider from Registry. The development-override
 commands below build source and intentionally skip Terraform init.
 The commands below use the persistent `crafty-provider-dev` project by default.
 If you set `COMPOSE_PROJECT_NAME`, keep the same value throughout startup,
@@ -58,7 +58,7 @@ terraform apply
 
 `make dev-provider` builds the provider and writes an ignored, project-local CLI configuration with a development override. Do not run `terraform init` with this override for this example. No global Terraform configuration is changed. The example defaults to the loopback API bridge; set `TF_VAR_crafty_url` to override it.
 
-The engine/version must be available in Crafty's download catalog. The example requests Paper 1.21.1, Crafty memory inputs 1–2 (1000–2000 JVM MiB in 4.10.4), and port 25565. Allow several GiB of RAM for the container if you intend to run Minecraft. Server creation needs internet access to download the server executable.
+The engine/version must be available in Crafty's download catalog. The example requests Paper 1.21.1, Crafty memory inputs 1–2 (1000–2000 JVM MiB in the Java download API), and port 25565. Allow several GiB of RAM for the container if you intend to run Minecraft. Server creation needs internet access to download the server executable.
 
 Verify the server appears in Crafty. Change the example's `name`, run `terraform plan` and `terraform apply`, then run another plan to verify convergence. Download-time changes replace the server. The provider does not start Minecraft or accept its EULA; complete required setup in Crafty before testing port 25565.
 
@@ -74,8 +74,8 @@ These are manual integration tests against real Crafty. Unit tests remain indepe
 
 ## Automated acceptance tests
 
-The acceptance suite uses `terraform-plugin-testing` and a local Terraform binary
-(1.5 or newer). From the repository root, with an API token created as described above:
+The acceptance suite uses `terraform-plugin-testing` and a local Terraform binary.
+From the repository root, with an API token created as described above:
 
 ```sh
 read -rs CRAFTY_TOKEN
@@ -122,14 +122,13 @@ sensitive Terraform input variable; avoid debug logging and keep test artifacts 
 
 `make test` skips acceptance tests unless `TF_ACC=1` is explicitly set.
 `make test-acc-mock` runs the controlled Terraform scenarios without starting
-Crafty or using a token. CI runs these and example validation on Terraform 1.5.0
-and 1.16.4; the live integration job uses 1.16.4.
+Crafty or using a token. CI uses one pinned Terraform version for all checks.
 
 ## Integration tests in GitHub Actions
 
-The **Crafty acceptance tests** job runs for pull requests (including forks), pushes
-to `main`, merge queues, and manual workflow dispatches. It uses the pinned Crafty
-image from `compose.yml` and the `compose.ci.yml` override. Each job has a unique
+The **Crafty acceptance tests** check requires every Crafty matrix job to pass. CI runs for pull requests (including forks), pushes
+to `main`, merge queues, and manual workflow dispatches. It selects each image from the
+[version matrix](../.github/workflows/ci.yml) with the `compose.ci.yml` override. Each job has a unique
 `crafty-provider-ci-*` Compose project and fresh named volumes. The override removes
 Crafty's published ports and exposes only the loopback API bridge on port 18001.
 Docker Compose 2.24.4 or newer is required for `!override`.
@@ -141,10 +140,10 @@ preconfigured Crafty account, or manual login are required. Authentication failu
 fail the job. Passwords and tokens are masked in GitHub logs; the acceptance log
 and diagnostic files are also redacted before being saved.
 
-Before Terraform runs, `dev/api_contract.py` verifies the actual Crafty 4.10.4
-runtime version, RAM conversion, GET fields, PATCH capabilities and rejections,
-and DELETE file behavior against the [recorded contract](../docs/api-contract.md).
-A different image version fails the contract guard until its baseline is reviewed.
+Before Terraform runs, `dev/api_contract.py` selects fixtures by runtime version
+and checks the [API contract](../docs/api-contract.md). Set `CRAFTY_IMAGE` and
+`CRAFTY_TEST_BASELINE` to test another recorded version; a mismatch or missing
+fixtures fails before mutation probes.
 The report `api-contract.json` is published for seven days on success and handled
 failures and contains no credentials, response bodies, or server paths. Its `result`
 is `passed`, `failed`, or `not_run`; `stage` identifies startup, bootstrap, precheck,

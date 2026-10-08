@@ -62,7 +62,7 @@ func (m serverModel) createRequest() client.CreateJavaServerRequest {
 	}
 }
 
-// Crafty 4.10.4 validates the same name constraints on create and PATCH.
+// Crafty validates these name constraints on create and PATCH.
 func validServerName(name string) bool {
 	return utf8.RuneCountInString(name) >= 2 && !strings.ContainsAny(name, "/\\#")
 }

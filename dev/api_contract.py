@@ -1,14 +1,20 @@
-"""Check the recorded Crafty 4.10.4 API contract against a disposable CI instance."""
+"""Check a versioned Crafty API contract against a disposable CI instance."""
 
 import json
 from pathlib import Path
+import re
 import sys
 import time
 import urllib.error
 import urllib.request
 import uuid
 
-FIXTURES = Path(__file__).resolve().parent.parent / "internal/client/testdata/crafty-4.10.4"
+FIXTURES = Path(__file__).resolve().parent.parent / "internal/client/testdata"
+
+
+def recorded_baselines():
+    return sorted(path.name.removeprefix("crafty-") for path in FIXTURES.glob("crafty-*")
+                  if path.is_dir() and re.fullmatch(r"crafty-[0-9]+\.[0-9]+\.[0-9]+", path.name))
 
 
 def assert_fields(actual, recorded):
@@ -53,25 +59,32 @@ def write_report(runner, report):
             raise RuntimeError("API contract report could not be written") from None
 
 
-def verify_contract(runner, token):
+def verify_contract(runner, token, baseline=None):
     report = {"result": "failed", "stage": "version", "memory_commands": [], "checks": []}
     pending = []
     try:
+        if baseline is not None and not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", baseline):
+            raise RuntimeError("API contract: invalid Crafty baseline; use a numeric major.minor.patch version")
         version = json.loads(runner.capture(["exec", "-T", "crafty", "cat", "/crafty/app/config/version.json"]))
         # Normalize only integer version components; never publish arbitrary runtime strings.
         actual_version = ".".join(str(int(version[key])) for key in ("major", "minor", "sub"))
         report["crafty_version"] = actual_version
-        if actual_version != "4.10.4":
-            raise RuntimeError("API contract: unsupported Crafty baseline; verify a new baseline first")
+        baseline = baseline or actual_version
+        report["expected_crafty_version"] = baseline
+        if actual_version != baseline:
+            raise RuntimeError("API contract: Crafty runtime does not match the selected baseline")
         report["stage"] = "fixtures"
-        spec = json.loads((FIXTURES / "spec-summary.json").read_text())
-        recorded_single = json.loads((FIXTURES / "server-response.json").read_text())["data"]
-        recorded_list = json.loads((FIXTURES / "list-response.json").read_text())["data"][0]
+        fixtures = FIXTURES / ("crafty-" + baseline)
+        if not fixtures.is_dir():
+            raise RuntimeError("API contract: no recorded fixtures for the selected Crafty baseline")
+        spec = json.loads((fixtures / "spec-summary.json").read_text())
+        recorded_single = json.loads((fixtures / "server-response.json").read_text())["data"]
+        recorded_list = json.loads((fixtures / "list-response.json").read_text())["data"][0]
         report.update(openapi_spec_version=spec["openapi_version"], api_spec_version=spec["api_version"],
                       openapi_sha256=spec["sha256"])
         report["stage"] = "probes"
         for minimum, maximum, remove_files in [(1, 2, False), (1.5, 2.5, True)]:
-            payload = json.loads((FIXTURES / "create-request.json").read_text())
+            payload = json.loads((fixtures / "create-request.json").read_text())
             payload["name"] = "contract-" + uuid.uuid4().hex
             download = payload["minecraft_java_create_data"]["download_jar_create_data"]
             download.update(mem_min=minimum, mem_max=maximum)

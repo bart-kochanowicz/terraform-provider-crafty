@@ -180,8 +180,8 @@ version and uses only that version's changelog entry as the release description.
 Snapshot versions derive from existing Git tags and can differ from `VERSION`.
 
 Check the required branch rules separately: CI execution alone does not prevent a
-merge. Require Lint, Tests and build, Crafty acceptance tests, both Terraform
-compatibility jobs, and Release snapshot before preparing a release tag. No tag
+merge. Require Lint, Tests and build, Crafty acceptance tests,
+and Release snapshot before preparing a release tag. No tag
 or publication is created by the snapshot checks.
 
 After reviewing and committing the changes, merge the release commit into `main`

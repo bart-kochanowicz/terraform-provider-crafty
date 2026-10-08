@@ -15,7 +15,7 @@ func (c *Client) CreateJavaServer(ctx context.Context, request CreateJavaServerR
 }
 
 // ListServers returns servers visible to the authenticated token.
-// Both GET endpoints return server data in 4.10.4. The collection allows
+// Both GET endpoints return server data. The collection allows
 // reconciliation without interpreting single GET HTTP 400 NOT_AUTHORIZED.
 func (c *Client) ListServers(ctx context.Context) ([]Server, error) {
 	var result []Server

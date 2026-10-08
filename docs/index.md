@@ -5,7 +5,7 @@ description: "Manage Minecraft Java servers through Crafty Controller v4."
 
 # Crafty Provider
 
-The Crafty provider manages Minecraft Java servers through Crafty Controller v4's v2 API. The verified baseline is **Crafty 4.10.4 with Paper 1.21.1**; other combinations are unverified. See the [API contract and support table](api-contract.md).
+The Crafty provider manages Minecraft Java servers through Crafty Controller's v2 API. See the [API contract and support table](api-contract.md) for tested Crafty releases, Minecraft engines and permission combinations.
 
 ```hcl
 terraform {
