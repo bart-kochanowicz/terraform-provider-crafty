@@ -57,7 +57,7 @@ func (p *craftyProvider) Configure(ctx context.Context, req provider.ConfigureRe
 	r.DataSourceData = api
 }
 func (p *craftyProvider) Resources(context.Context) []func() resource.Resource {
-	return []func() resource.Resource{NewMinecraftServerResource, NewWebhookResource}
+	return []func() resource.Resource{NewMinecraftServerResource, NewWebhookResource, NewScheduleResource}
 }
 func (p *craftyProvider) DataSources(context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{NewServerDataSource}
