@@ -1,0 +1,19 @@
+---
+page_title: "crafty_webhook Resource"
+description: "Manage a Crafty server webhook."
+---
+
+# crafty_webhook
+
+Manage event notifications using a token with server CONFIG permission.
+Callback URLs are sensitive in Terraform output but remain in state.
+
+{{ tffile "examples/resources/crafty_webhook/resource.tf" }}
+
+{{ .SchemaMarkdown }}
+
+## Import
+
+```sh
+terraform import crafty_webhook.alerts SERVER_ID/WEBHOOK_ID
+```
