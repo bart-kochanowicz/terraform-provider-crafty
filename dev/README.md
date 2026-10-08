@@ -74,8 +74,8 @@ These are manual integration tests against real Crafty. Unit tests remain indepe
 
 ## Automated acceptance tests
 
-The acceptance suite uses `terraform-plugin-testing` and a local Terraform binary
-(1.5 or newer). From the repository root, with an API token created as described above:
+The acceptance suite uses `terraform-plugin-testing` and a local Terraform binary.
+From the repository root, with an API token created as described above:
 
 ```sh
 read -rs CRAFTY_TOKEN
@@ -122,8 +122,7 @@ sensitive Terraform input variable; avoid debug logging and keep test artifacts 
 
 `make test` skips acceptance tests unless `TF_ACC=1` is explicitly set.
 `make test-acc-mock` runs the controlled Terraform scenarios without starting
-Crafty or using a token. CI runs these and example validation on Terraform 1.5.0
-and 1.16.4; the live integration job uses 1.16.4.
+Crafty or using a token. CI uses one pinned Terraform version for all checks.
 
 ## Integration tests in GitHub Actions
 

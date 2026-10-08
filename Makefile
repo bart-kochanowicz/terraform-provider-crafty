@@ -24,7 +24,7 @@ fmt-check:
 lint:
 	$(GOLANGCI_LINT) run
 	$(GOLANGCI_LINT) fmt --diff --diff-colored=false
-# Common checks are shared with CI; compatibility uses the selected Terraform CLI.
+# Common checks are shared with CI.
 check: check-core lint deps-check docs-check release-check test-acc-mock
 .PHONY: check-core deps-check test-python check-compose validate-examples test-acc-mock
 check-core: fmt-check test vet test-python check-compose validate-examples

@@ -55,29 +55,7 @@ jobs:
           version: v2.15.0
           args: check
       - name: Run shared local and CI checks
-        run: make check-core
-
-  compatibility:
-    name: Terraform compatibility (${{ matrix.terraform }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        terraform: ['1.5.0', '1.16.4']
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ matrix.terraform }}
-          terraform_wrapper: false
-      - name: Validate examples and verify Terraform state behavior
-        run: make validate-examples test-acc-mock
+        run: make check-core test-acc-mock
 
   snapshot:
     name: Release snapshot

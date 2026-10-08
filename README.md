@@ -15,7 +15,7 @@ To try the published provider on a disposable local Crafty instance, follow the
 
 ## Requirements
 
-- Git, Make, and Terraform 1.5 or newer.
+- Git, Make, and Terraform.
 - Go 1.25 or newer only when building the provider or running its development checks.
 - For the local quickstart: a running Docker engine with Docker Compose and free
   local ports 8443, 18000, and 25565. Docker Desktop or OrbStack is suitable.
@@ -299,9 +299,8 @@ GitHub Actions runs `.github/workflows/ci.yml` for pull requests, pushes to `mai
 
 - **Lint** uses golangci-lint **v2.14.0** with `errcheck`, `govet`, `ineffassign`, `staticcheck`, and `unused`. It also checks `gofmt` and `goimports` formatting.
 - **Crafty acceptance tests** requires every configured Crafty compatibility job to pass. Each run starts a fresh Docker Compose stack, waits for readiness, bootstraps an API key, verifies the recorded API contract, and runs the live Terraform lifecycle suite. It also publishes a contract report on success and failure. Failures upload redacted diagnostics, and cleanup removes the disposable containers and volumes. See [the CI integration guide](dev/README.md#integration-tests-in-github-actions).
-- **Tests and build** checks dependency integrity and whether `go mod tidy` changes tracked module files, checks Go and Terraform formatting, runs uncached tests with the race detector, runs `go vet`, builds the provider, and validates both Terraform examples with a development override. Its core checks use the same `make check-core` target as local development.
+- **Tests and build** checks dependencies and formatting, runs Go tests and vet, builds the provider, validates examples, and tests Terraform recovery/replacement behavior. It runs `make check-core test-acc-mock` with the Terraform version pinned in CI.
 - **Release snapshot** builds all six platform ZIPs, verifies checksums and archive contents, and tests installation of the native package in a fresh Terraform configuration. It does not publish a release. See [release preparation](docs/releasing.md) and [the changelog](CHANGELOG.md).
-- **Terraform compatibility** validates both examples and runs the controlled Terraform recovery/replacement suite on **1.5.0** (the declared minimum) and **1.16.4**. These tests do not require Crafty; live API compatibility remains covered by the integration job.
 
 Install golangci-lint locally using Homebrew:
 
