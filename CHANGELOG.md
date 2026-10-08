@@ -3,6 +3,10 @@
 The initial release was published on 2026-10-03. Download binaries and checksums
 from [GitHub Releases](https://github.com/bart-kochanowicz/terraform-provider-crafty/releases/tag/v0.1.0).
 
+## 0.1.5 — 2026-10-08
+
+- Add `crafty_webhook` resource with configuration management, drift detection, and import by server/webhook ID.
+
 ## 0.1.4 — 2026-10-08
 
 - Add `crafty_server` data source to read an existing server's current settings by ID.
