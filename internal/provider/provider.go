@@ -52,12 +52,16 @@ func (p *craftyProvider) Configure(ctx context.Context, req provider.ConfigureRe
 		r.Diagnostics.AddError("Invalid Crafty token", "The API token must not be empty.")
 		return
 	}
-	r.ResourceData = client.New(u.String(), m.Token.ValueString())
+	api := client.New(u.String(), m.Token.ValueString())
+	r.ResourceData = api
+	r.DataSourceData = api
 }
 func (p *craftyProvider) Resources(context.Context) []func() resource.Resource {
 	return []func() resource.Resource{NewMinecraftServerResource}
 }
-func (p *craftyProvider) DataSources(context.Context) []func() datasource.DataSource { return nil }
+func (p *craftyProvider) DataSources(context.Context) []func() datasource.DataSource {
+	return []func() datasource.DataSource{NewServerDataSource}
+}
 
 // New returns a provider factory for the Terraform plugin server.
 func New(version string) func() provider.Provider {
