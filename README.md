@@ -6,6 +6,7 @@ Go module: `github.com/bart-kochanowicz/terraform-provider-crafty`.
 
 Read existing servers by ID with the [`crafty_server` data source](docs/data-sources/server.md).
 Manage event notifications with the [`crafty_webhook` resource](docs/resources/webhook.md).
+Manage recurring tasks with the [`crafty_schedule` resource](docs/resources/schedule.md).
 
 Licensed under the [MIT License](LICENSE). Release archives include the license text.
 

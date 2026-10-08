@@ -46,18 +46,18 @@ func (e *APIError) Error() string {
 	}
 	return fmt.Sprintf("%s %s returned HTTP %d. %s", e.method, e.path, e.StatusCode, hint)
 }
-func (c *Client) request(ctx context.Context, method, path string, body, result any) error {
+func (c *Client) send(ctx context.Context, method, path string, body any) ([]byte, error) {
 	var reader io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
 		if err != nil {
-			return fmt.Errorf("encode API request: %w", err)
+			return nil, fmt.Errorf("encode API request: %w", err)
 		}
 		reader = bytes.NewReader(b)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, c.base+path, reader)
 	if err != nil {
-		return fmt.Errorf("create API request: %w", err)
+		return nil, fmt.Errorf("create API request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Accept", "application/json")
@@ -66,21 +66,29 @@ func (c *Client) request(ctx context.Context, method, path string, body, result 
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("crafty API transport failed: %w", err)
+		return nil, fmt.Errorf("crafty API transport failed: %w", err)
 	}
 	defer func() {
 		// Closing a response body does not affect the completed API operation.
 		_ = resp.Body.Close()
 	}()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return &APIError{StatusCode: resp.StatusCode, method: method, path: path, RetryAfter: retryAfter(resp.Header.Get("Retry-After"))}
+		return nil, &APIError{StatusCode: resp.StatusCode, method: method, path: path, RetryAfter: retryAfter(resp.Header.Get("Retry-After"))}
 	}
 	b, err := io.ReadAll(io.LimitReader(resp.Body, 8*1024*1024+1))
 	if err != nil {
-		return fmt.Errorf("read API response: %w", err)
+		return nil, fmt.Errorf("read API response: %w", err)
 	}
 	if len(b) > 8*1024*1024 {
-		return fmt.Errorf("API response exceeds 8 MiB")
+		return nil, fmt.Errorf("API response exceeds 8 MiB")
+	}
+	return b, nil
+}
+
+func (c *Client) request(ctx context.Context, method, path string, body, result any) error {
+	b, err := c.send(ctx, method, path, body)
+	if err != nil {
+		return err
 	}
 	if len(bytes.TrimSpace(b)) == 0 {
 		if result != nil {

@@ -1,0 +1,33 @@
+---
+page_title: "crafty_schedule Resource"
+description: "Manage independent recurring Crafty tasks."
+---
+
+# crafty_schedule
+
+Manage recurring commands using a token with server SCHEDULE permission.
+
+{{ tffile "examples/resources/crafty_schedule/resource.tf" }}
+
+{{ .SchemaMarkdown }}
+
+## Scheduling and limitations
+
+`cron_string` overrides interval settings. It uses five APScheduler fields in the
+Crafty host's timezone; numeric weekdays run from Monday (`0`) through Sunday (`6`).
+Prefer names such as `mon`. For `days`, Crafty selects every Nth day of the month
+at `start_time`, rather than measuring elapsed 24-hour periods.
+
+Creation requires `enabled = true`: Crafty persists disabled tasks without
+returning their ID. Existing or imported tasks can be disabled. Refresh only reads
+configuration. One-time tasks, task chains and backup policy references are not supported.
+
+Read errors preserve state. Crafty returns HTTP 500 for a deleted task, which cannot
+be distinguished from a server error. After independently confirming permanent
+deletion, back up state and use `terraform state rm` before recreating the task.
+
+## Import
+
+```sh
+terraform import crafty_schedule.announcement SERVER_ID/SCHEDULE_ID
+```
