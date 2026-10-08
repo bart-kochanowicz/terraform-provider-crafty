@@ -43,7 +43,7 @@ validate-examples: dev-provider
 # Only controlled HTTP scenarios: no Crafty instance, token, or download required.
 test-acc-mock:
 	@command -v "$(TERRAFORM)" >/dev/null
-	env -u TF_CLI_CONFIG_FILE TF_ACC=1 TF_ACC_TERRAFORM_PATH="$$(command -v "$(TERRAFORM)")" $(GO) test -v -race -count=1 -timeout 10m ./internal/provider -run '^TestAccMinecraftServer(PostCreateRecovery|InitialSettingsRecovery|PendingExternalDeletion|ReplacementPlans)$$'
+	env -u TF_CLI_CONFIG_FILE TF_ACC=1 TF_ACC_TERRAFORM_PATH="$$(command -v "$(TERRAFORM)")" $(GO) test -v -race -count=1 -timeout 10m ./internal/provider -run '^TestAcc(MinecraftServer(PostCreateRecovery|InitialSettingsRecovery|PendingExternalDeletion|ReplacementPlans)|ServerDataSource)$$'
 vet:
 	$(GO) vet ./...
 install: build

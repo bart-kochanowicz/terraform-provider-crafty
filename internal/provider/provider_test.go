@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -28,6 +29,15 @@ func TestProviderMetadataAndResourceRegistration(t *testing.T) {
 	resources[0]().Metadata(ctx, resource.MetadataRequest{ProviderTypeName: metadata.TypeName}, &resourceMetadata)
 	if resourceMetadata.TypeName != "crafty_minecraft_server" {
 		t.Fatalf("unexpected resource type: %s", resourceMetadata.TypeName)
+	}
+	sources := p.DataSources(ctx)
+	if len(sources) != 1 {
+		t.Fatalf("expected one data source, got %d", len(sources))
+	}
+	var sourceMetadata datasource.MetadataResponse
+	sources[0]().Metadata(ctx, datasource.MetadataRequest{ProviderTypeName: metadata.TypeName}, &sourceMetadata)
+	if sourceMetadata.TypeName != "crafty_server" {
+		t.Fatalf("unexpected data source type: %s", sourceMetadata.TypeName)
 	}
 }
 
@@ -60,6 +70,9 @@ func TestProviderConfigure(t *testing.T) {
 			if !test.wantError {
 				if _, ok := configured.ResourceData.(*client.Client); !ok {
 					t.Fatalf("unexpected provider client: %T", configured.ResourceData)
+				}
+				if configured.DataSourceData != configured.ResourceData {
+					t.Fatal("resources and data sources must share the configured client")
 				}
 			}
 		})

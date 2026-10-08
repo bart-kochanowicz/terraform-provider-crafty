@@ -100,10 +100,15 @@ resource "crafty_minecraft_server" "test" {
  port = 25565
  %s
 }
+data "crafty_server" "lookup" {
+ id = crafty_minecraft_server.test.id
+}
 `, endpoint, serverName, engine, version, extra)
 	}
 	check := func(expectedName string) resource.TestCheckFunc {
 		return resource.ComposeTestCheckFunc(
+			resource.TestCheckResourceAttrPair("data.crafty_server.lookup", "id", "crafty_minecraft_server.test", "id"),
+			resource.TestCheckResourceAttr("data.crafty_server.lookup", "name", expectedName),
 			resource.TestCheckResourceAttr("crafty_minecraft_server.test", "name", expectedName),
 			resource.TestCheckResourceAttr("crafty_minecraft_server.test", "engine", engine),
 			resource.TestCheckResourceAttr("crafty_minecraft_server.test", "version", version),

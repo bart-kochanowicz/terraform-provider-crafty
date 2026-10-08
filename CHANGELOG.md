@@ -3,6 +3,10 @@
 The initial release was published on 2026-10-03. Download binaries and checksums
 from [GitHub Releases](https://github.com/bart-kochanowicz/terraform-provider-crafty/releases/tag/v0.1.0).
 
+## Unreleased
+
+- Add `crafty_server` data source to read an existing server's current settings by ID.
+
 ## 0.1.3 — 2026-10-08
 
 - Verify Crafty 4.11.0 compatibility, make it the default development image, and test both recorded versions in CI.
