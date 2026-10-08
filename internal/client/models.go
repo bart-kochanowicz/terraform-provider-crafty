@@ -1,6 +1,6 @@
 package client
 
-// CreateJavaServerRequest follows the verified Crafty 4.10.4 Java download contract.
+// CreateJavaServerRequest follows Crafty's Java download API contract.
 type CreateJavaServerRequest struct {
 	Name           string         `json:"name"`
 	MonitoringType string         `json:"monitoring_type"`
@@ -22,7 +22,7 @@ type JavaCreateData struct {
 }
 
 // JavaDownload specifies the engine, version, memory, and server port.
-// Crafty 4.10.4 download_jar multiplies each memory input by 1000 for JVM M flags.
+// Crafty download_jar multiplies each memory input by 1000 for JVM M flags.
 type JavaDownload struct {
 	Category string `json:"category"`
 	Engine   string `json:"type"`

@@ -2,32 +2,32 @@
 
 ## Supported and tested versions
 
-| Component | Verified baseline | Evidence |
+| Component | Verified baselines | Evidence |
 | --- | --- | --- |
-| Crafty Controller | **4.10.4**, official Linux Docker image | Fresh-instance API probes, Terraform acceptance tests, runtime `version.json` check |
-| Image | `registry.gitlab.com/crafty-controller/crafty-4:4.10.4` | Local ARM64; GitHub Actions Ubuntu AMD64 |
-| API | `/api/v2`, published specification version **2.0.1** | Official OpenAPI 3.0.4 snapshot retrieved on 2026-10-02 |
+| Crafty Controller | **4.10.4, 4.11.0**, official Linux Docker images | Fresh-instance API probes, Terraform acceptance tests, runtime `version.json` check |
+| Image | `registry.gitlab.com/crafty-controller/crafty-4:<version>`; default in [`compose.yml`](../dev/compose.yml) | Verified locally on ARM64; CI matrix configured for Ubuntu AMD64 |
+| API | `/api/v2`, published specification version **2.0.1** | Official OpenAPI 3.0.4 snapshot rechecked on 2026-10-08 |
 | Minecraft creation | Java `download_jar`, **Paper 1.21.1** | Whole and fractional memory probes; provider lifecycle tests |
 | Authentication | Superuser full-access API key on a disposable instance | Automatic bootstrap in `dev/ci.py` |
 
 Other Crafty releases, operating systems, engines, Minecraft versions, and restricted
 permission combinations have not been certified by these tests. The provider does
 not block other versions, but their compatibility is unverified. CI deliberately
-rejects a different runtime version until a new baseline is reviewed. A download
+checks the runtime against the expected version and requires matching fixtures. A download
 catalog entry must also remain available; its availability is outside the provider.
 
 The specification is served by the [official API reference](https://docs.craftycontrol.com/pages/developer-guide/api-reference/v2/).
 Its [raw OpenAPI file](https://docs.craftycontrol.com/pages/developer-guide/api-reference/openapi-spec.yml)
 has SHA-256 `bfadb88c5bba1996e2a5ffe6102f266ba257eae662470f6210896c16518dfb3b`
 for this comparison. The documentation site is mutable; tests use the recorded
-[factual schema summary](../internal/client/testdata/crafty-4.10.4/spec-summary.json)
+[factual schema summary](../internal/client/testdata/crafty-4.11.0/spec-summary.json)
 instead of fetching a changing specification during CI. The upstream source tag is
-[`v4.10.4`](https://gitlab.com/crafty-controller/crafty-4/-/tree/v4.10.4)
-(commit `6394bbc178feebc091b775bd4f6e4e865ffa3e96`).
+[`v4.11.0`](https://gitlab.com/crafty-controller/crafty-4/-/tree/v4.11.0)
+(commit `fe65b372a4388552e9f4a1fe54251b2321f042fa`).
 
 ## Specification versus observed behavior
 
-| Area | Published specification | Observed Crafty 4.10.4 | Provider behavior |
+| Area | Published specification | Observed API contract | Provider behavior |
 | --- | --- | --- | --- |
 | POST Java memory | Integer examples `1` and `2`; no unit declaration | Inputs `1/2` generate `-Xms1000M -Xmx2000M`; `1.5/2.5` generate `1500M/2500M` | Whole integer inputs, passed unchanged; `1 <= mem_min <= mem_max` |
 | Collection GET | Array of `Server` objects | Array with string `server_id`/`server_name` and boolean `auto_start` | Refresh name, `auto_start`, monitoring address/port, and execution command by ID |
@@ -40,8 +40,8 @@ instead of fetching a changing specification during CI. The upstream source tag 
 ### Memory units
 
 The Java download path constructs its command through
-[`create_api_server`](https://gitlab.com/crafty-controller/crafty-4/-/blob/v4.10.4/app/classes/shared/main_controller.py)
-and [`Helpers.float_to_string`](https://gitlab.com/crafty-controller/crafty-4/-/blob/v4.10.4/app/classes/helpers/helpers.py),
+[`create_api_server`](https://gitlab.com/crafty-controller/crafty-4/-/blob/v4.11.0/app/classes/shared/main_controller.py)
+and [`Helpers.float_to_string`](https://gitlab.com/crafty-controller/crafty-4/-/blob/v4.11.0/app/classes/helpers/helpers.py),
 which multiplies memory inputs by **1000**. JVM `M` suffixes represent 1024²-byte
 units; the [Java command reference](https://docs.oracle.com/javase/8/docs/technotes/tools/unix/java.html)
 shows equivalent byte and `m` examples. Thus a Crafty input unit is **1000 MiB**,
@@ -57,8 +57,8 @@ actual process memory usage.
 
 ### GET fields and drift
 
-The [recorded single response](../internal/client/testdata/crafty-4.10.4/server-response.json)
-and [collection response](../internal/client/testdata/crafty-4.10.4/list-response.json)
+The [recorded single response](../internal/client/testdata/crafty-4.11.0/server-response.json)
+and [collection response](../internal/client/testdata/crafty-4.11.0/list-response.json)
 contain the complete observed field shapes, with identifiers and timestamps
 normalized. Both omit the specification's `server_uuid` and `backup_path` fields.
 Runtime fields absent from the `Server` schema include `app_id`, `created_by`,
@@ -84,7 +84,7 @@ The live probe persists five fields in one PATCH and confirms each with GET:
 `server_name`, `auto_start`, `server_ip`, `server_port`, and `execution_command`.
 It also confirms that `mem_min` as a direct PATCH field is rejected with HTTP 400
 `INVALID_JSON_SCHEMA`. The
-[upstream handler](https://gitlab.com/crafty-controller/crafty-4/-/blob/v4.10.4/app/classes/web/routes/api/servers/server/index.py)
+[upstream handler](https://gitlab.com/crafty-controller/crafty-4/-/blob/v4.11.0/app/classes/web/routes/api/servers/server/index.py)
 accepts additional schema fields and applies different schemas to superusers and
 ordinary users. Their full behavior and restricted-token access are not covered
 by these probes.
@@ -106,16 +106,16 @@ tests the explicit diagnostic without changing the created server. See the
 ### Deletion
 
 Tests confirm both deletion modes on servers they create. The provider sends
-plain DELETE and preserves world directories in this verified version. A replacement
+plain DELETE and preserves world directories. A replacement
 creates a new server directory; it does not reuse the old world automatically.
 Review replacement plans and manage retained files separately. CI's final Compose
 teardown removes the entire disposable project's volumes, including retained files.
 
 A successful collection response contains servers visible to the current token.
 Absence proves that the ID is no longer listed for that token; it does not distinguish
-physical deletion from revoked access. The provider requires three consecutive
-successful absences before removing established resources from state. API errors
-retain state, and pending post-create/update refreshes also retain identity.
+physical deletion from revoked access. Three successful absences cause a read
+error and preserve established state. Pending refreshes also retain identity;
+after an accepted DELETE, three absences confirm completion.
 
 ## Automated evidence and extending support
 
@@ -138,5 +138,5 @@ To certify another version, start a fresh official image, verify its runtime
 version, compare its schemas and observed responses with the recorded specification,
 run all probes and Terraform scenarios (including mutable settings, drift, import
 rejection, and post-create settings failure recovery), and review the resulting differences.
-Update the fixtures, version guard, support table, and CI pin together. An image
+Add recorded fixtures and update the support table and CI matrix; tests discover fixtures automatically. An image
 starting successfully is not sufficient evidence of API compatibility.

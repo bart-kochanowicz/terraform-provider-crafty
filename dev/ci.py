@@ -106,7 +106,7 @@ class Integration:
         except Exception:
             write_report(self, {"result": "not_run", "stage": stage, "failure_code": stage + "_failed"})
             raise
-        verify_contract(self, token)
+        verify_contract(self, token, os.environ.get("CRAFTY_TEST_BASELINE"))
         env = os.environ.copy()
         env.update(CRAFTY_TOKEN=token, CRAFTY_URL="http://127.0.0.1:18001", TF_ACC="1",
                    CRAFTY_TEST_COMPOSE_PROJECT=self.project)

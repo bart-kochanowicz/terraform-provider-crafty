@@ -128,12 +128,18 @@ jobs:
           GPG_FINGERPRINT: ${{ steps.snapshot-key.outputs.fingerprint }}
         run: python3 dev/verify_release.py --source-manifest terraform-registry-manifest.json --require-signature --signing-fingerprint "$GPG_FINGERPRINT"
 
-  integration:
-    name: Crafty acceptance tests
+  integration_baselines:
+    name: Crafty integration (${{ matrix.crafty }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        crafty: ['4.10.4', '4.11.0']
     env:
-      COMPOSE_PROJECT_NAME: crafty-provider-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      COMPOSE_PROJECT_NAME: crafty-provider-ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ strategy.job-index }}
+      CRAFTY_IMAGE: registry.gitlab.com/crafty-controller/crafty-4:${{ matrix.crafty }}
+      CRAFTY_TEST_BASELINE: ${{ matrix.crafty }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -157,7 +163,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: crafty-api-contract-${{ github.run_id }}-${{ github.run_attempt }}
+          name: crafty-api-contract-${{ matrix.crafty }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: bin/ci-logs/api-contract.json
           retention-days: 7
           if-no-files-found: error
@@ -168,10 +174,21 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: crafty-integration-${{ github.run_id }}-${{ github.run_attempt }}
+          name: crafty-integration-${{ matrix.crafty }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: bin/ci-logs
           retention-days: 7
           if-no-files-found: warn
       - name: Remove containers and volumes
         if: always()
         run: python3 dev/ci.py down
+
+  integration:
+    name: Crafty acceptance tests
+    needs: integration_baselines
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every Crafty baseline to pass
+        env:
+          BASELINES_RESULT: ${{ needs.integration_baselines.result }}
+        run: test "$BASELINES_RESULT" = success

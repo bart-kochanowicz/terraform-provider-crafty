@@ -4,6 +4,7 @@ from contextlib import nullcontext
 import io
 import json
 from pathlib import Path
+import shutil
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -12,6 +13,11 @@ from urllib.error import HTTPError
 
 import api_contract
 from api_contract import assert_fields, request
+
+
+def runtime_version(baseline=None):
+    baseline = baseline or api_contract.recorded_baselines()[-1]
+    return json.dumps(dict(zip(("major", "minor", "sub"), map(int, baseline.split(".")))))
 
 
 class ContractTest(unittest.TestCase):
@@ -40,12 +46,42 @@ class ContractTest(unittest.TestCase):
 
 
 class ReportTest(unittest.TestCase):
+    def test_runtime_must_match_selected_baseline_before_mutations(self):
+        baseline = api_contract.recorded_baselines()[-1]
+        with tempfile.TemporaryDirectory() as directory:
+            runner = SimpleNamespace(output=Path(directory), capture=lambda _: runtime_version("0.0.0"))
+            with patch("api_contract.request") as mutation:
+                with self.assertRaisesRegex(RuntimeError, "does not match"):
+                    api_contract.verify_contract(runner, "secret-token", baseline)
+            mutation.assert_not_called()
+            report = json.loads((runner.output / "api-contract.json").read_text())
+            self.assertEqual(report["stage"], "version")
+            self.assertEqual(report["expected_crafty_version"], baseline)
+            self.assertEqual(report["crafty_version"], "0.0.0")
+
+    def test_invalid_baseline_is_rejected_without_disclosing_input(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runner = SimpleNamespace(output=Path(directory), capture=lambda _: self.fail("runtime read"))
+            with self.assertRaisesRegex(RuntimeError, "invalid Crafty baseline") as raised:
+                api_contract.verify_contract(runner, "secret-token", "secret-baseline")
+            self.assertNotIn("secret", str(raised.exception))
+            self.assertNotIn("secret", (runner.output / "api-contract.json").read_text())
+
+    def test_runtime_without_recorded_fixtures_is_rejected_before_mutations(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runner = SimpleNamespace(output=Path(directory), capture=lambda _: runtime_version("0.0.0"))
+            with patch("api_contract.request") as mutation:
+                with self.assertRaisesRegex(RuntimeError, "no recorded fixtures"):
+                    api_contract.verify_contract(runner, "secret-token")
+            mutation.assert_not_called()
+            report = json.loads((runner.output / "api-contract.json").read_text())
+            self.assertEqual(report["stage"], "fixtures")
+
     def test_early_failures_always_write_safe_report(self):
         cases = [
-            ('{"major":4,"minor":10,"sub":5}', None, "version"),
             ('secret-token', None, "version"),
-            ('{"major":4,"minor":10,"sub":4}', OSError("secret-path"), "fixtures"),
-            ('{"major":4,"minor":10,"sub":4}', None, "probes"),
+            (runtime_version(), OSError("secret-path"), "fixtures"),
+            (runtime_version(), None, "probes"),
         ]
         for version, fixture_error, stage in cases:
             with self.subTest(stage=stage), tempfile.TemporaryDirectory() as directory:
@@ -63,7 +99,7 @@ class ReportTest(unittest.TestCase):
 
     def test_probe_failure_preserves_error_when_cleanup_and_report_fail(self):
         with tempfile.TemporaryDirectory() as directory:
-            runner = SimpleNamespace(output=Path(directory), capture=lambda _: '{"major":4,"minor":10,"sub":4}')
+            runner = SimpleNamespace(output=Path(directory), capture=lambda _: runtime_version())
             with patch("api_contract.request", side_effect=[{"data": {"new_server_id": "id"}}, RuntimeError("probe failed"), RuntimeError("cleanup failed")]):
                 with self.assertRaisesRegex(RuntimeError, "probe failed"):
                     api_contract.verify_contract(runner, "secret-token")
@@ -83,13 +119,29 @@ class ReportTest(unittest.TestCase):
         self.assertNotIn("secret", str(raised.exception))
 
     def test_successful_probes_produce_passed_report(self):
-        single = json.loads((api_contract.FIXTURES / "server-response.json").read_text())["data"]
+        baselines = api_contract.recorded_baselines()
+        self.assertTrue(baselines, "No recorded Crafty contracts found")
+        for baseline in baselines:
+            with self.subTest(baseline=baseline):
+                self.check_successful_probes(baseline)
+
+    def test_new_fixture_directory_needs_no_version_allowlist(self):
+        source = api_contract.FIXTURES / ("crafty-" + api_contract.recorded_baselines()[-1])
+        with tempfile.TemporaryDirectory() as directory:
+            fixtures = Path(directory)
+            shutil.copytree(source, fixtures / "crafty-9.8.7")
+            with patch("api_contract.FIXTURES", fixtures):
+                self.assertEqual(api_contract.recorded_baselines(), ["9.8.7"])
+                self.check_successful_probes("9.8.7")
+
+    def check_successful_probes(self, baseline):
+        single = json.loads((api_contract.FIXTURES / ("crafty-" + baseline) / "server-response.json").read_text())["data"]
         current = {}
         deleted = False
 
         def capture(args):
             if args[-1].endswith("version.json"):
-                return '{"major":4,"minor":10,"sub":4}'
+                return runtime_version(baseline)
             return "server-port=25577\n"
 
         def fake_request(token, method, path, data=None, expected_status=200):
@@ -120,8 +172,10 @@ class ReportTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             runner = SimpleNamespace(output=Path(directory), capture=capture)
             with patch("api_contract.request", side_effect=fake_request), patch("api_contract.file_exists", side_effect=[True, False]):
-                api_contract.verify_contract(runner, "secret-token")
+                api_contract.verify_contract(runner, "secret-token", baseline)
             report = json.loads((runner.output / "api-contract.json").read_text())
             self.assertEqual((report["result"], report["stage"]), ("passed", "complete"))
+            self.assertEqual(report["expected_crafty_version"], baseline)
+            self.assertEqual(report["crafty_version"], baseline)
             self.assertEqual(len(report["memory_commands"]), 2)
             self.assertNotIn("failure_code", report)

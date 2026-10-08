@@ -66,7 +66,14 @@ deletion from lost visibility. Provider 0.1.1 retains pending IDs, but its
 established-resource absence handling can propose duplicate creation after access
 changes. Stop before applying such a plan and restore access.
 
-The next provider change should cover this regression and define safe handling of
-ambiguous absence. Further tests must cover ordinary accounts, roles assigned to
+Provider 0.1.2 fixes this regression by retaining established state on ambiguous
+absence. Further tests must cover ordinary accounts, roles assigned to
 new servers, loss of roles using the same token, and the complete permission
 matrix. Full-access keys remain the verified quickstart baseline.
+
+## Crafty 4.11.0 compatibility
+
+On 2026-10-08, live API contracts and full Terraform acceptance suites passed on
+fresh Crafty 4.10.4 and 4.11.0 Linux ARM64 instances, using Terraform 1.16.4,
+Paper 1.21.1 and full-access superuser keys. The generic helper also passed with
+automatic runtime fixture selection. CI configures Ubuntu AMD64 jobs for both versions.

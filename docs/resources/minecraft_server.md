@@ -39,8 +39,8 @@ resource "crafty_minecraft_server" "example" {
 
 - `engine` (String) Download engine identifier, such as paper. Changes replace the server.
 - `host` (String) Monitoring host reachable from Crafty. Changes replace the server.
-- `mem_max` (Number) Maximum Java memory in Crafty download units (1000 JVM MiB per unit in Crafty 4.10.4). Changes replace the server.
-- `mem_min` (Number) Minimum Java memory in Crafty download units (1000 JVM MiB per unit in Crafty 4.10.4). Changes replace the server.
+- `mem_max` (Number) Maximum Java memory in Crafty download units (1000 JVM MiB per unit). Changes replace the server.
+- `mem_min` (Number) Minimum Java memory in Crafty download units (1000 JVM MiB per unit). Changes replace the server.
 - `name` (String) Server name; at least two characters, excluding slashes, backslashes, and #. POST name and PATCH server_name.
 - `port` (Number) Monitoring and server.properties port. Changes replace the server.
 - `version` (String) Minecraft download version. Changes replace the server.
@@ -70,15 +70,15 @@ Optional:
 
 
 
-Verified Crafty 4.10.4 `download_jar` converts memory input `1/2` into JVM flags `-Xms1000M -Xmx2000M`; these inputs are not exact GiB. The provider accepts whole integer units. Names need at least two characters and may not contain slashes, backslashes, or `#`. Paper 1.21.1 is the tested engine/version pair. See the [API contract](../api-contract.md) for evidence and the supported-version table.
+Crafty's `download_jar` converts memory input `1/2` into JVM flags `-Xms1000M -Xmx2000M`; these inputs are not exact GiB. The provider accepts whole integer units. Names need at least two characters and may not contain slashes, backslashes, or `#`. See the [API contract](../api-contract.md) for tested versions, engines and supporting evidence.
 
 ## Lifecycle and limitations
 
-Creation uses POST `/api/v2/servers`; reads use GET `/api/v2/servers`; updates and deletion use PATCH and DELETE `/api/v2/servers/{serverID}`. Both GET endpoints return server objects in 4.10.4. The single-GET specification wrongly describes a role; the provider uses the collection because single GET returns ambiguous HTTP 400 `NOT_AUTHORIZED` after deletion.
+Creation uses POST `/api/v2/servers`; reads use GET `/api/v2/servers`; updates and deletion use PATCH and DELETE `/api/v2/servers/{serverID}`. Both GET endpoints return server objects. The single-GET specification wrongly describes a role; the provider uses the collection because single GET returns ambiguous HTTP 400 `NOT_AUTHORIZED` after deletion.
 
 Name, automatic start, monitoring address/port, and execution command are updated in place. Other creation inputs are retained in Terraform state; GET does not reconstruct the complete original download payload, although it returns the execution command and current monitoring fields. GET refreshes all five mutable fields. Explicit optional settings are reconciled on apply; omitted settings adopt Crafty values. An established server missing from three consecutive successful list responses causes a read error and remains in state, because collection absence cannot distinguish deletion from lost token access. A server with a pending post-create/update refresh remains in state until its metadata can be read. DELETE 404 is treated as already deleted; a collection GET 404 remains an error.
 
-In verified 4.10.4, default DELETE removes the panel record and preserves world files. Replacement creates a new directory and does not reuse the old world. Back up server data, review plans, and clean up retained directories separately.
+Default DELETE removes the panel record and preserves world files. Replacement creates a new directory and does not reuse the old world. Back up server data, review plans, and clean up retained directories separately.
 
 ## Mutable settings and creation inputs
 
@@ -105,8 +105,8 @@ restarting the panel. Restricted-token PATCH permissions remain unverified.
 ## Import
 
 `terraform import crafty_minecraft_server.example SERVER_ID` returns
-`Import unavailable for the verified API` and performs no mutation. Crafty 4.10.4
-GET cannot reliably reconstruct all required creation inputs: engine, Minecraft
+`Import unavailable for the verified API` and performs no mutation. Crafty's
+GET responses cannot reliably reconstruct all required creation inputs: engine, Minecraft
 version, original memory inputs, and the `server.properties` port. `type` identifies
 Java, while executable names, update URLs, and arbitrary execution commands are
 not authoritative original download metadata. Current monitoring port is distinct

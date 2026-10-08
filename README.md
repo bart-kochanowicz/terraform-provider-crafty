@@ -20,9 +20,9 @@ To try the published provider on a disposable local Crafty instance, follow the
 - For the local quickstart: a running Docker engine with Docker Compose and free
   local ports 8443, 18000, and 25565. Docker Desktop or OrbStack is suitable.
 - Internet access for Registry packages, container images, and Crafty's server download.
-- For an existing instance: Crafty Controller 4.10.4 (verified baseline), a trusted
+- For an existing instance: Crafty Controller with the v2 API, a trusted
   TLS certificate, and an API token with server creation, access, configuration,
-  and deletion permissions. Other versions and general restricted-token support are unverified; see the
+  and deletion permissions. See the [tested compatibility matrix](docs/api-contract.md#supported-and-tested-versions) and the
   [visibility limitation](#api-token-visibility).
 - golangci-lint v2.14.0 is needed only for formatting/lint and the full checks;
   Python 3 and Docker Compose 2.24.4 or newer are also needed for `make check`.
@@ -101,7 +101,7 @@ A development-override warning is unexpected on this path; check that
 
 The plan should show **one resource to add**. Review it, then confirm apply with
 `yes`. The example uses Paper 1.21.1 and creation memory inputs 1–2, which generate
-1000–2000 JVM MiB in Crafty 4.10.4. Creation downloads the server executable.
+1000–2000 JVM MiB in Crafty's Java download API. Creation downloads the server executable.
 Check the returned `server_id` and the server's appearance in the Crafty dashboard.
 The provider does not start Minecraft or accept its EULA. A created record confirms
 API metadata visibility, not successful completion of every background download.
@@ -211,7 +211,7 @@ as `TF_CLI_CONFIG_FILE` and skip init, as in the quickstart. More details are in
 
 ## API token visibility
 
-Use a full-access key for the verified quickstart. In Crafty 4.10.4, disabling
+Use a full-access key for the verified quickstart. Disabling
 `full_access` on an administrator's key can hide servers when the account has no
 server roles. An API request can then return HTTP 200 with an empty collection
 while the server still exists. Creation permission alone does not guarantee
@@ -251,7 +251,7 @@ See [the complete example](examples/local/main.tf).
 | `monitoring_port` | Int64 | PATCH/GET `server_port` | Optional + computed, mutable; monitoring only |
 | `execution_command` | String | PATCH/GET `execution_command` | Optional + computed, mutable; overrides generated command |
 
-Memory uses Crafty 4.10.4 Java download units: each input unit produces **1000 JVM MiB**, so `mem_min = 1` and `mem_max = 2` generate `-Xms1000M -Xmx2000M`. These are not exact GiB. Inputs remain integers with `1 <= mem_min <= mem_max`; the port must be 1–65535. Names require at least two characters and exclude slashes, backslashes, and `#`. Other input strings must not be empty. See the [verified API contract and supported versions](docs/api-contract.md).
+Memory uses Crafty's Java download units: each input unit produces **1000 JVM MiB**, so `mem_min = 1` and `mem_max = 2` generate `-Xms1000M -Xmx2000M`. These are not exact GiB. Inputs remain integers with `1 <= mem_min <= mem_max`; the port must be 1–65535. Names require at least two characters and exclude slashes, backslashes, and `#`. Other input strings must not be empty. See the [verified API contract and supported versions](docs/api-contract.md).
 
 Optional settings can be supplied during creation or added later. Creation waits for
 metadata, then sends one settings PATCH within the create timeout. A rejected or
@@ -269,12 +269,12 @@ See [the resource guide](docs/resources/minecraft_server.md) for an example and 
 ## API scope and specification limitations
 
 - POST `/api/v2/servers` creates a Minecraft Java server using `minecraft_java` and `download_jar`.
-- GET `/api/v2/servers` reads visible server objects and finds the server by ID. Crafty 4.10.4 also returns server objects from single GET, contrary to the specification's role schema; the provider retains collection reads because single GET uses ambiguous HTTP 400 `NOT_AUTHORIZED` for a missing ID. Three consecutive successful collection responses without an established server cause a read error and preserve Terraform state. An empty or filtered collection cannot distinguish deletion from lost token access. A server whose post-create/update refresh is pending retains its ID while preparation or API recovery continues. A collection 404 is an endpoint error, not proof that the server was deleted.
+- GET `/api/v2/servers` reads visible server objects and finds the server by ID. Crafty also returns server objects from single GET, contrary to the specification's role schema; the provider retains collection reads because single GET uses ambiguous HTTP 400 `NOT_AUTHORIZED` for a missing ID. Three consecutive successful collection responses without an established server cause a read error and preserve Terraform state. An empty or filtered collection cannot distinguish deletion from lost token access. A server whose post-create/update refresh is pending retains its ID while preparation or API recovery continues. A collection 404 is an endpoint error, not proof that the server was deleted.
 - PATCH `/api/v2/servers/{serverID}` updates name, automatic start, monitoring address/port, and launch command without replacing the ID. Only changed, known settings are sent; an explicit `false` is preserved. There is no documented PUT operation.
 - DELETE `/api/v2/servers/{serverID}` deletes the server. HTTP 404 is treated as already deleted.
 - HTTP 401/403, other non-success HTTP statuses, malformed JSON, and application-level unsuccessful statuses become English Terraform diagnostics.
 - Creation inputs remain in state. Reads refresh name, automatic start, monitoring address/port, and launch command. Explicit optional settings are reconciled on apply; omitted settings are observed without enforcing a default. GET also exposes the execution command and current monitoring address/port, but does not reconstruct the complete original download payload or server.properties port.
-- Changing download inputs replaces the panel record and creates a new directory. In verified Crafty 4.10.4, the provider's default DELETE preserves files; it does not reuse old worlds during replacement. Review plans, back up data, and manage retained directories separately.
+- Changing download inputs replaces the panel record and creates a new directory. The provider's default DELETE preserves files; it does not reuse old worlds during replacement. Review plans, back up data, and manage retained directories separately.
 - Creation can finish preparing asynchronously. The ID and a private pending-refresh marker are saved before polling GET for complete metadata and the requested name. If polling times out or fails after Crafty returned an ID, the provider returns a warning and keeps that ID without tainting the resource. A later `terraform plan` resumes the refresh. If the saved ID remains permanently pending, follow the [recovery procedure](docs/resources/minecraft_server.md#resolving-a-server-that-stays-pending). This confirms API metadata visibility, not that Minecraft has started or that every background download succeeded.
 - Only reads are retried: selected transient HTTP statuses (408, 429, 500, 502, 503, 504), transport timeouts, connection interruptions, and temporary DNS failures. Backoff starts at 1 second and doubles to a 10-second maximum; `Retry-After` can extend the delay within the operation deadline. Authentication, endpoint, malformed-response, and application-status errors stop immediately.
 - POST and DELETE are sent once per operation; each configuration PATCH is sent once. After an accepted configuration PATCH, desired settings and ID are saved even if the following read fails. After an accepted DELETE, the provider requires three consecutive successful collection responses without the ID; reappearance or a read error resets confirmation. A verification failure leaves the ID in state for a later destroy attempt. Inspect Crafty before retrying a create whose response was lost: without a returned ID, the provider cannot safely identify the new server.
@@ -298,7 +298,7 @@ Unit tests use local HTTP servers and do not require Crafty credentials. For aut
 GitHub Actions runs `.github/workflows/ci.yml` for pull requests, pushes to `main` (including merges), merge queues, and manual dispatches. The integration job starts a fresh Crafty instance and creates its API credentials automatically; no repository secrets or manual configuration are required.
 
 - **Lint** uses golangci-lint **v2.14.0** with `errcheck`, `govet`, `ineffassign`, `staticcheck`, and `unused`. It also checks `gofmt` and `goimports` formatting.
-- **Crafty acceptance tests** starts the Docker Compose stack, waits for readiness, bootstraps an API key, verifies the recorded API contract, and runs the live Terraform lifecycle suite. It also publishes a contract report on success and failure. Failures upload redacted diagnostics, and cleanup removes the disposable containers and volumes. See [the CI integration guide](dev/README.md#integration-tests-in-github-actions).
+- **Crafty acceptance tests** requires every configured Crafty compatibility job to pass. Each run starts a fresh Docker Compose stack, waits for readiness, bootstraps an API key, verifies the recorded API contract, and runs the live Terraform lifecycle suite. It also publishes a contract report on success and failure. Failures upload redacted diagnostics, and cleanup removes the disposable containers and volumes. See [the CI integration guide](dev/README.md#integration-tests-in-github-actions).
 - **Tests and build** checks dependency integrity and whether `go mod tidy` changes tracked module files, checks Go and Terraform formatting, runs uncached tests with the race detector, runs `go vet`, builds the provider, and validates both Terraform examples with a development override. Its core checks use the same `make check-core` target as local development.
 - **Release snapshot** builds all six platform ZIPs, verifies checksums and archive contents, and tests installation of the native package in a fresh Terraform configuration. It does not publish a release. See [release preparation](docs/releasing.md) and [the changelog](CHANGELOG.md).
 - **Terraform compatibility** validates both examples and runs the controlled Terraform recovery/replacement suite on **1.5.0** (the declared minimum) and **1.16.4**. These tests do not require Crafty; live API compatibility remains covered by the integration job.

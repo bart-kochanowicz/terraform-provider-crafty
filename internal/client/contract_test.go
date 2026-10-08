@@ -7,12 +7,31 @@ import (
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 )
 
-func contractFixture(t *testing.T, name string) []byte {
+func recordedCraftyBaselines(t *testing.T) []string {
 	t.Helper()
-	data, err := os.ReadFile("testdata/crafty-4.10.4/" + name + ".json")
+	entries, err := os.ReadDir("testdata")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var baselines []string
+	for _, entry := range entries {
+		if entry.IsDir() && strings.HasPrefix(entry.Name(), "crafty-") {
+			baselines = append(baselines, strings.TrimPrefix(entry.Name(), "crafty-"))
+		}
+	}
+	if len(baselines) == 0 {
+		t.Fatal("no recorded Crafty contracts found")
+	}
+	return baselines
+}
+
+func contractFixture(t *testing.T, baseline, name string) []byte {
+	t.Helper()
+	data, err := os.ReadFile("testdata/crafty-" + baseline + "/" + name + ".json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -20,6 +39,12 @@ func contractFixture(t *testing.T, name string) []byte {
 }
 
 func TestRecordedCraftyContract(t *testing.T) {
+	for _, baseline := range recordedCraftyBaselines(t) {
+		t.Run(baseline, func(t *testing.T) { testRecordedCraftyContract(t, baseline) })
+	}
+}
+
+func testRecordedCraftyContract(t *testing.T, baseline string) {
 	ctx := context.Background()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -28,14 +53,14 @@ func TestRecordedCraftyContract(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
 				t.Error(err)
 			}
-			if err := json.Unmarshal(contractFixture(t, "create-request"), &want); err != nil {
+			if err := json.Unmarshal(contractFixture(t, baseline, "create-request"), &want); err != nil {
 				t.Error(err)
 			}
 			if !reflect.DeepEqual(got, want) {
 				t.Error("typed create request differs from the recorded live request")
 			}
 			w.WriteHeader(201)
-			_, _ = w.Write(contractFixture(t, "create-response"))
+			_, _ = w.Write(contractFixture(t, baseline, "create-response"))
 		case r.Method == "PATCH":
 			var got map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
@@ -44,17 +69,17 @@ func TestRecordedCraftyContract(t *testing.T) {
 			if !reflect.DeepEqual(got, map[string]any{"server_name": "renamed"}) {
 				t.Errorf("rename-only PATCH must contain only server_name: %v", got)
 			}
-			_, _ = w.Write(contractFixture(t, "patch-response"))
+			_, _ = w.Write(contractFixture(t, baseline, "patch-response"))
 		case r.URL.Path == "/api/v2/servers":
-			_, _ = w.Write(contractFixture(t, "list-response"))
+			_, _ = w.Write(contractFixture(t, baseline, "list-response"))
 		default:
-			_, _ = w.Write(contractFixture(t, "server-response"))
+			_, _ = w.Write(contractFixture(t, baseline, "server-response"))
 		}
 	}))
 	defer server.Close()
 	api := New(server.URL, "test-only")
 	var create CreateJavaServerRequest
-	if err := json.Unmarshal(contractFixture(t, "create-request"), &create); err != nil {
+	if err := json.Unmarshal(contractFixture(t, baseline, "create-request"), &create); err != nil {
 		t.Fatal(err)
 	}
 	created, err := api.CreateJavaServer(ctx, create)
@@ -78,9 +103,15 @@ func TestRecordedCraftyContract(t *testing.T) {
 }
 
 func TestRecordedMissingServerIsNotAuthoritativeNotFound(t *testing.T) {
+	for _, baseline := range recordedCraftyBaselines(t) {
+		t.Run(baseline, func(t *testing.T) { testRecordedMissingServerIsNotAuthoritativeNotFound(t, baseline) })
+	}
+}
+
+func testRecordedMissingServerIsNotAuthoritativeNotFound(t *testing.T, baseline string) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(400)
-		_, _ = w.Write(contractFixture(t, "missing-server-response"))
+		_, _ = w.Write(contractFixture(t, baseline, "missing-server-response"))
 	}))
 	defer server.Close()
 	err := New(server.URL, "test-only").request(context.Background(), "GET", "/api/v2/servers/missing", nil, nil)
