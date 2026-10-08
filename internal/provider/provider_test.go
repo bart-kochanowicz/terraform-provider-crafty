@@ -22,8 +22,8 @@ func TestProviderMetadataAndResourceRegistration(t *testing.T) {
 		t.Fatalf("unexpected metadata: %+v", metadata)
 	}
 	resources := p.Resources(ctx)
-	if len(resources) != 3 {
-		t.Fatalf("expected three resources, got %d", len(resources))
+	if len(resources) != 4 {
+		t.Fatalf("expected four resources, got %d", len(resources))
 	}
 	var resourceMetadata resource.MetadataResponse
 	resources[0]().Metadata(ctx, resource.MetadataRequest{ProviderTypeName: metadata.TypeName}, &resourceMetadata)
