@@ -59,11 +59,15 @@ func (c *Client) send(ctx context.Context, method, path string, body any) ([]byt
 	if err != nil {
 		return nil, fmt.Errorf("create API request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+c.token)
-	req.Header.Set("Accept", "application/json")
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	return c.sendRequest(req)
+}
+
+func (c *Client) sendRequest(req *http.Request) ([]byte, error) {
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Accept", "application/json")
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("crafty API transport failed: %w", err)
@@ -73,7 +77,7 @@ func (c *Client) send(ctx context.Context, method, path string, body any) ([]byt
 		_ = resp.Body.Close()
 	}()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, &APIError{StatusCode: resp.StatusCode, method: method, path: path, RetryAfter: retryAfter(resp.Header.Get("Retry-After"))}
+		return nil, &APIError{StatusCode: resp.StatusCode, method: req.Method, path: req.URL.Path, RetryAfter: retryAfter(resp.Header.Get("Retry-After"))}
 	}
 	b, err := io.ReadAll(io.LimitReader(resp.Body, 8*1024*1024+1))
 	if err != nil {
