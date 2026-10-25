@@ -51,7 +51,20 @@ func (s *serverResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 	opCtx, cancel := context.WithTimeout(ctx, duration)
 	defer cancel()
-	created, err := s.client.CreateJavaServer(opCtx, m.createRequest())
+	create := m.createRequest()
+	if !m.ArchivePath.IsNull() {
+		if err := m.validateArchive(); err != nil {
+			r.Diagnostics.AddError("Invalid server archive", err.Error())
+			return
+		}
+		name, err := s.client.UploadImportArchive(opCtx, m.ArchivePath.ValueString(), m.ArchiveSHA256.ValueString())
+		if err != nil {
+			r.Diagnostics.AddError("Unable to upload server archive", err.Error()+" No server creation request was sent. Upload POSTs were not retried.")
+			return
+		}
+		create = m.createImportRequest(name)
+	}
+	created, err := s.client.CreateJavaServer(opCtx, create)
 	if err != nil {
 		r.Diagnostics.AddError("Unable to create Minecraft server", err.Error()+" The POST request was not retried. Its outcome may be uncertain; inspect Crafty before applying again.")
 		return
@@ -253,6 +266,9 @@ func (s *serverResource) ValidateConfig(ctx context.Context, req resource.Valida
 			r.Diagnostics.AddError("Invalid operation timeout", fmt.Sprintf("timeouts.%s must be a positive duration, such as 30s or 10m.", name))
 		}
 	}
+	if err := m.validateSource(); err != nil {
+		r.Diagnostics.AddError("Invalid server installation source", err.Error())
+	}
 	if !m.Name.IsNull() && !m.Name.IsUnknown() && !validServerName(m.Name.ValueString()) {
 		r.Diagnostics.AddError("Invalid server name", "Name must contain at least two characters and must not contain slashes, backslashes, or #.")
 	}
@@ -291,5 +307,5 @@ var _ resource.ResourceWithImportState = (*serverResource)(nil)
 
 // ID-only import cannot recover required download metadata from the verified API.
 func (s *serverResource) ImportState(_ context.Context, _ resource.ImportStateRequest, r *resource.ImportStateResponse) {
-	r.Diagnostics.AddError("Import unavailable for the verified API", "Verified Crafty GET responses do not reconstruct the required engine, version, original memory inputs, and server.properties port. Import by ID is unavailable; the provider will not guess these values from filenames or arbitrary execution commands. No server was modified.")
+	r.Diagnostics.AddError("Import unavailable for the verified API", "Verified Crafty GET responses do not reconstruct the installation source, original memory inputs, and server.properties port. Import by ID is unavailable; the provider will not guess these values from filenames or arbitrary execution commands. No server was modified.")
 }

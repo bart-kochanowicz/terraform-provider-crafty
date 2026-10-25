@@ -12,24 +12,31 @@ import (
 )
 
 type serverModel struct {
-	Timeouts         timeouts.Value `tfsdk:"timeouts"`
-	ID               types.String   `tfsdk:"id"`
-	Name             types.String   `tfsdk:"name"`
-	Engine           types.String   `tfsdk:"engine"`
-	Version          types.String   `tfsdk:"version"`
-	MemMin           types.Int64    `tfsdk:"mem_min"`
-	MemMax           types.Int64    `tfsdk:"mem_max"`
-	Host             types.String   `tfsdk:"host"`
-	Port             types.Int64    `tfsdk:"port"`
-	AutoStart        types.Bool     `tfsdk:"auto_start"`
-	MonitoringHost   types.String   `tfsdk:"monitoring_host"`
-	MonitoringPort   types.Int64    `tfsdk:"monitoring_port"`
-	ExecutionCommand types.String   `tfsdk:"execution_command"`
+	Timeouts            timeouts.Value `tfsdk:"timeouts"`
+	ID                  types.String   `tfsdk:"id"`
+	Name                types.String   `tfsdk:"name"`
+	Engine              types.String   `tfsdk:"engine"`
+	Version             types.String   `tfsdk:"version"`
+	MemMin              types.Int64    `tfsdk:"mem_min"`
+	MemMax              types.Int64    `tfsdk:"mem_max"`
+	Host                types.String   `tfsdk:"host"`
+	Port                types.Int64    `tfsdk:"port"`
+	AutoStart           types.Bool     `tfsdk:"auto_start"`
+	MonitoringHost      types.String   `tfsdk:"monitoring_host"`
+	MonitoringPort      types.Int64    `tfsdk:"monitoring_port"`
+	ExecutionCommand    types.String   `tfsdk:"execution_command"`
+	ArchivePath         types.String   `tfsdk:"archive_path"`
+	ArchiveSHA256       types.String   `tfsdk:"archive_sha256"`
+	ArchiveInternalPath types.String   `tfsdk:"archive_internal_path"`
+	Executable          types.String   `tfsdk:"executable"`
 }
 
 func (m serverModel) validate() error {
-	if m.Name.ValueString() == "" || m.Engine.ValueString() == "" || m.Version.ValueString() == "" || m.Host.ValueString() == "" {
-		return fmt.Errorf("name, engine, version, and host must not be empty")
+	if m.Name.ValueString() == "" || m.Host.ValueString() == "" {
+		return fmt.Errorf("name and host must not be empty")
+	}
+	if err := m.validateSource(); err != nil {
+		return err
 	}
 	if !validServerName(m.Name.ValueString()) {
 		return fmt.Errorf("name must contain at least two characters and must not contain slashes, backslashes, or #")
@@ -55,11 +62,20 @@ func (m serverModel) createRequest() client.CreateJavaServerRequest {
 	return client.CreateJavaServerRequest{
 		Name: m.Name.ValueString(), MonitoringType: "minecraft_java", CreateType: "minecraft_java",
 		Monitoring: client.JavaMonitoring{Host: m.Host.ValueString(), Port: m.Port.ValueInt64()},
-		Java: client.JavaCreateData{CreateType: "download_jar", Download: client.JavaDownload{
+		Java: client.JavaCreateData{CreateType: "download_jar", Download: &client.JavaDownload{
 			Category: "mc_java_servers", Engine: m.Engine.ValueString(), Version: m.Version.ValueString(),
 			MemMin: m.MemMin.ValueInt64(), MemMax: m.MemMax.ValueInt64(), Port: m.Port.ValueInt64(),
 		}},
 	}
+}
+
+func (m serverModel) createImportRequest(name string) client.CreateJavaServerRequest {
+	req := m.createRequest()
+	req.Java = client.JavaCreateData{CreateType: "import_server", Import: &client.JavaImport{
+		ArchiveName: name, InternalPath: m.ArchiveInternalPath.ValueString(), Executable: m.Executable.ValueString(),
+		MemMin: m.MemMin.ValueInt64(), MemMax: m.MemMax.ValueInt64(), Port: m.Port.ValueInt64(),
+	}}
+	return req
 }
 
 // Crafty validates these name constraints on create and PATCH.

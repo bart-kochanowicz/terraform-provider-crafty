@@ -1,11 +1,11 @@
 ---
 page_title: "crafty_minecraft_server Resource"
-description: "Manage a Minecraft Java server downloaded by Crafty."
+description: "Manage a Minecraft Java server downloaded by Crafty or installed from a ZIP server pack."
 ---
 
 # crafty_minecraft_server
 
-Creates a Minecraft Java server using Crafty's `download_jar` operation. Bedrock creation is not supported. ID-only import is unavailable for the verified API; see the import limitations below.
+Creates a Minecraft Java server using Crafty's JAR download or ZIP server-pack import. Bedrock creation and ID-only Terraform import are not supported.
 
 ```hcl
 resource "crafty_minecraft_server" "example" {
@@ -37,21 +37,25 @@ resource "crafty_minecraft_server" "example" {
 
 ### Required
 
-- `engine` (String) Download engine identifier, such as paper. Changes replace the server.
 - `host` (String) Monitoring host reachable from Crafty. Changes replace the server.
 - `mem_max` (Number) Maximum Java memory in Crafty download units (1000 JVM MiB per unit). Changes replace the server.
 - `mem_min` (Number) Minimum Java memory in Crafty download units (1000 JVM MiB per unit). Changes replace the server.
 - `name` (String) Server name; at least two characters, excluding slashes, backslashes, and #. POST name and PATCH server_name.
-- `port` (Number) Monitoring and server.properties port. Changes replace the server.
-- `version` (String) Minecraft download version. Changes replace the server.
+- `port` (Number) Monitoring port and generated server.properties port. An imported server.properties file retains its own port. Changes replace the server.
 
 ### Optional
 
+- `archive_internal_path` (String) Relative directory inside the ZIP containing the server files; omit for the archive root. Changes replace the server.
+- `archive_path` (String) Local ZIP server pack available to the machine running Terraform. Mutually exclusive with engine and version. Changes replace the server.
+- `archive_sha256` (String) Expected SHA-256 of archive_path, checked before upload. Required for ZIP installation. Changes replace the server.
 - `auto_start` (Boolean) Automatic start setting. Omit to observe Crafty; explicit true or false is managed through PATCH.
+- `engine` (String) Download engine identifier, such as paper. Required with version unless archive_path is set. Changes replace the server.
+- `executable` (String) Path to the server executable relative to archive_internal_path. Required for ZIP installation. Changes replace the server.
 - `execution_command` (String) Current launch command. Omit to observe Crafty's generated command; explicit values override it through PATCH, including its JVM memory flags. Does not restart the server.
 - `monitoring_host` (String) Current monitoring address. Defaults to the host creation input; PATCH updates monitoring only.
 - `monitoring_port` (Number) Current monitoring port, 1–65535. Defaults to the port creation input; PATCH does not change server.properties.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
+- `version` (String) Minecraft download version. Required with engine unless archive_path is set. Changes replace the server.
 
 ### Read-Only
 
@@ -69,6 +73,35 @@ Optional:
 
 
 
+
+## ZIP server packs
+
+Use a server pack available on the machine running Terraform:
+
+```hcl
+resource "crafty_minecraft_server" "modpack" {
+  name                  = "Modded Minecraft"
+  archive_path          = var.server_pack_path
+  archive_sha256        = filesha256(var.server_pack_path)
+  archive_internal_path = "server-pack"
+  executable            = "server.jar"
+  host                  = "127.0.0.1"
+  port                  = 25566
+  mem_min               = 4
+  mem_max               = 8
+}
+```
+
+Omit `archive_internal_path` for files at the ZIP root. `executable` is relative
+to that directory; use `execution_command` when the pack needs a different
+launcher. Client-only packs are unsuitable. ZIPs with traversal, links or special
+files are rejected. Checksums are checked before upload and again during transfer;
+Crafty verifies each chunk. Failed upload POSTs are not retried.
+
+Installation inputs replace the server and create a new directory. Updates do
+not upgrade or migrate an existing world. Imported `server.properties` values
+are preserved: align its port with `port`. Extracted files and EULA configuration
+come from the pack; Terraform does not start or validate its Minecraft process.
 
 Crafty's `download_jar` converts memory input `1/2` into JVM flags `-Xms1000M -Xmx2000M`; these inputs are not exact GiB. The provider accepts whole integer units. Names need at least two characters and may not contain slashes, backslashes, or `#`. See the [API contract](../api-contract.md) for tested versions, engines and supporting evidence.
 
@@ -91,7 +124,7 @@ Minecraft networking consistent separately.
 `execution_command` is the complete launch command, rather than a RAM editor.
 Explicit values take precedence over the command generated from `mem_min` and
 `mem_max`, and are stored exactly without parsing or rewriting shell arguments.
-The original engine/version/memory inputs remain in state and still require
+The original installation and memory inputs remain in state and still require
 replacement when changed. Supply a command valid for the actual executable;
 Terraform does not run, restart, or validate a Minecraft process.
 
@@ -106,8 +139,8 @@ restarting the panel. Restricted-token PATCH permissions remain unverified.
 
 `terraform import crafty_minecraft_server.example SERVER_ID` returns
 `Import unavailable for the verified API` and performs no mutation. Crafty's
-GET responses cannot reliably reconstruct all required creation inputs: engine, Minecraft
-version, original memory inputs, and the `server.properties` port. `type` identifies
+GET responses cannot reliably reconstruct the installation source, original
+memory inputs, or the `server.properties` port. `type` identifies
 Java, while executable names, update URLs, and arbitrary execution commands are
 not authoritative original download metadata. Current monitoring port is distinct
 from the file port. The provider does not guess or fabricate these values, and

@@ -7,7 +7,7 @@
 | Crafty Controller | **4.10.4, 4.11.0**, official Linux Docker images | Fresh-instance API probes, Terraform acceptance tests, runtime `version.json` check |
 | Image | `registry.gitlab.com/crafty-controller/crafty-4:<version>`; default in [`compose.yml`](../dev/compose.yml) | Verified locally on ARM64; CI matrix configured for Ubuntu AMD64 |
 | API | `/api/v2`, published specification version **2.0.1** | Official OpenAPI 3.0.4 snapshot rechecked on 2026-10-08 |
-| Minecraft creation | Java `download_jar`, **Paper 1.21.1** | Whole and fractional memory probes; provider lifecycle tests |
+| Minecraft creation | Java `download_jar` (**Paper 1.21.1**) and ZIP `import_server` | Download lifecycle; chunked ZIP upload, extraction, rename and retained files after destroy |
 | Authentication | Superuser full-access API key on a disposable instance | Automatic bootstrap in `dev/ci.py` |
 
 Other Crafty releases, operating systems, engines, Minecraft versions, and restricted
@@ -15,6 +15,10 @@ permission combinations have not been certified by these tests. The provider doe
 not block other versions, but their compatibility is unverified. CI deliberately
 checks the runtime against the expected version and requires matching fixtures. A download
 catalog entry must also remain available; its availability is outside the provider.
+
+ZIP acceptance tests use a synthetic server pack larger than one upload chunk.
+They verify extracted contents and retention after destroy in an isolated
+container. They do not launch Minecraft or certify a particular modpack.
 
 The specification is served by the [official API reference](https://docs.craftycontrol.com/pages/developer-guide/api-reference/v2/).
 Its [raw OpenAPI file](https://docs.craftycontrol.com/pages/developer-guide/api-reference/openapi-spec.yml)

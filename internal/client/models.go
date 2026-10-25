@@ -17,8 +17,9 @@ type JavaMonitoring struct {
 
 // JavaCreateData selects the Java download operation.
 type JavaCreateData struct {
-	CreateType string       `json:"create_type"`
-	Download   JavaDownload `json:"download_jar_create_data"`
+	CreateType string        `json:"create_type"`
+	Download   *JavaDownload `json:"download_jar_create_data,omitempty"`
+	Import     *JavaImport   `json:"import_server_create_data,omitempty"`
 }
 
 // JavaDownload specifies the engine, version, memory, and server port.
@@ -30,6 +31,16 @@ type JavaDownload struct {
 	MemMin   int64  `json:"mem_min"`
 	MemMax   int64  `json:"mem_max"`
 	Port     int64  `json:"server_properties_port"`
+}
+
+// JavaImport selects an uploaded server pack and its launch executable.
+type JavaImport struct {
+	ArchiveName  string `json:"archive_name"`
+	InternalPath string `json:"archive_internal_path"`
+	Executable   string `json:"jarfile"`
+	MemMin       int64  `json:"mem_min"`
+	MemMax       int64  `json:"mem_max"`
+	Port         int64  `json:"server_properties_port"`
 }
 
 // CreatedServer contains the identifier returned by server creation.

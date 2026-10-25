@@ -88,7 +88,7 @@ func TestAccWebhookLive(t *testing.T) {
 	created, err := api.CreateJavaServer(context.Background(), client.CreateJavaServerRequest{
 		Name: "tf-webhook-test", MonitoringType: "minecraft_java", CreateType: "minecraft_java",
 		Monitoring: client.JavaMonitoring{Host: "127.0.0.1", Port: 25565},
-		Java:       client.JavaCreateData{CreateType: "download_jar", Download: client.JavaDownload{Category: "mc_java_servers", Engine: "paper", Version: "1.21.1", MemMin: 1, MemMax: 2, Port: 25565}},
+		Java:       client.JavaCreateData{CreateType: "download_jar", Download: &client.JavaDownload{Category: "mc_java_servers", Engine: "paper", Version: "1.21.1", MemMin: 1, MemMax: 2, Port: 25565}},
 	})
 	if err != nil || created.ID == "" {
 		t.Fatalf("create test server: %v", err)
