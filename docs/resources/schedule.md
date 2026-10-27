@@ -30,6 +30,7 @@ resource "crafty_schedule" "announcement" {
 ### Optional
 
 - `action` (String) Crafty action label. Defaults to command; command determines the queued operation.
+- `backup_id` (String) Existing backup policy ID for backup_server. Empty uses the server default policy.
 - `cron_string` (String) Five-field APScheduler cron expression in Crafty's host timezone. Overrides interval settings.
 - `enabled` (Boolean) Whether the scheduler runs this task. Must be true when creating.
 - `interval` (Number) Positive interval count. Ignored when cron_string is set.
@@ -51,7 +52,13 @@ at `start_time`, rather than measuring elapsed 24-hour periods.
 
 Creation requires `enabled = true`: Crafty persists disabled tasks without
 returning their ID. Existing or imported tasks can be disabled. Refresh only reads
-configuration. One-time tasks, task chains and backup policy references are not supported.
+configuration. One-time tasks and task chains are not supported.
+
+For backups, use `command = "backup_server"` and `backup_id` to select an existing
+policy on the same server. Omit `backup_id` to use the default policy. Crafty checks
+policy ownership. The policy controls retention, compression and whether the game
+is stopped and restarted for the backup; creating or refreshing a schedule does
+not run it.
 
 Read errors preserve state. Crafty returns HTTP 500 for a deleted task, which cannot
 be distinguished from a server error. After independently confirming permanent
