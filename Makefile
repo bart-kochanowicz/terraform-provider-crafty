@@ -1,5 +1,5 @@
 GO ?= go
-VERSION ?= 0.1.8
+VERSION ?= 0.1.9
 GOLANGCI_LINT ?= golangci-lint
 TERRAFORM ?= terraform
 DOCKER ?= docker

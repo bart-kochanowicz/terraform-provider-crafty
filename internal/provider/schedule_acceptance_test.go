@@ -27,6 +27,19 @@ func TestAccSchedule(t *testing.T) {
 	if os.Getenv("TF_ACC") != "1" {
 		t.Skip("Set TF_ACC=1 to run Terraform schedule tests")
 	}
+	for name, settings := range map[string][2]string{
+		"command":        {"say scheduled-test", ""},
+		"default backup": {"backup_server", ""},
+		"backup policy":  {"backup_server", "backup-policy"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			testScheduleAPI(t, settings[0], settings[1])
+		})
+	}
+}
+
+func testScheduleAPI(t *testing.T, command, backupID string) {
+	t.Helper()
 	var mu sync.Mutex
 	var settings client.ScheduleSettings
 	exists := false
@@ -71,7 +84,7 @@ func TestAccSchedule(t *testing.T) {
 		}
 	}))
 	defer api.Close()
-	testScheduleLifecycle(t, api.URL, "test-only", "abc", func(id string) error {
+	testScheduleLifecycle(t, api.URL, "test-only", "abc", command, backupID, func(id string) error {
 		mu.Lock()
 		defer mu.Unlock()
 		if exists {
@@ -104,15 +117,31 @@ func TestAccScheduleLive(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	testScheduleLifecycle(t, endpoint, token, created.ID, func(id string) error {
-		// A missing-task GET returns an ambiguous 500. The isolated database provides
-		// an independent deletion check without interpreting that error as absence.
-		taskID, err := strconv.ParseInt(id, 10, 64)
-		if err != nil {
-			return err
-		}
-		return checkScheduleDeleted(context.Background(), project, taskID)
-	})
+	policies, err := api.ListBackupConfigs(context.Background(), created.ID)
+	if err != nil || len(policies) != 1 {
+		t.Fatalf("expected the new server's default backup policy: %v", err)
+	}
+	var backupID string
+	for id := range policies {
+		backupID = id
+	}
+	for name, settings := range map[string][2]string{
+		"command":        {"say scheduled-test", ""},
+		"default backup": {"backup_server", ""},
+		"backup policy":  {"backup_server", backupID},
+	} {
+		t.Run(name, func(t *testing.T) {
+			testScheduleLifecycle(t, endpoint, token, created.ID, settings[0], settings[1], func(id string) error {
+				// A missing-task GET returns an ambiguous 500. The isolated database provides
+				// an independent deletion check without interpreting that error as absence.
+				taskID, err := strconv.ParseInt(id, 10, 64)
+				if err != nil {
+					return err
+				}
+				return checkScheduleDeleted(context.Background(), project, taskID)
+			})
+		})
+	}
 }
 
 func checkScheduleDeleted(ctx context.Context, project string, id int64) error {
@@ -123,7 +152,7 @@ func checkScheduleDeleted(ctx context.Context, project string, id int64) error {
 	return nil
 }
 
-func testScheduleLifecycle(t *testing.T, endpoint, token, serverID string, checkDeleted func(string) error) {
+func testScheduleLifecycle(t *testing.T, endpoint, token, serverID, command, backupID string, checkDeleted func(string) error) {
 	t.Helper()
 	t.Setenv("TF_VAR_schedule_test_token", token)
 	api := client.New(endpoint, token)
@@ -141,13 +170,14 @@ provider "crafty" {
 resource "crafty_schedule" "test" {
  server_id = %q
  name = "Scheduled command"
- command = "say scheduled-test"
+ command = %q
+ backup_id = %q
  enabled = %t
  interval = 87600
  interval_type = "hours"
  cron_string = %q
 }
-`, endpoint, serverID, enabled, cron)
+`, endpoint, serverID, command, backupID, enabled, cron)
 	}
 	importStep := func() resource.TestStep {
 		return resource.TestStep{ResourceName: "crafty_schedule.test", ImportState: true, ImportStateIdFunc: func(_ *terraform.State) (string, error) { return serverID + "/" + id, nil }, ImportStateVerify: true}
@@ -157,7 +187,7 @@ resource "crafty_schedule" "test" {
 		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){"crafty": providerserver.NewProtocol6WithError(New("test")())},
 		CheckDestroy:             func(_ *terraform.State) error { return checkDeleted(id) },
 		Steps: []resource.TestStep{
-			{Config: config(true, ""), Check: resource.ComposeTestCheckFunc(resource.TestCheckResourceAttr("crafty_schedule.test", "enabled", "true"), func(state *terraform.State) error {
+			{Config: config(true, ""), Check: resource.ComposeTestCheckFunc(resource.TestCheckResourceAttr("crafty_schedule.test", "enabled", "true"), resource.TestCheckResourceAttr("crafty_schedule.test", "backup_id", backupID), func(state *terraform.State) error {
 				id = state.RootModule().Resources["crafty_schedule.test"].Primary.ID
 				return nil
 			})},
@@ -176,7 +206,7 @@ resource "crafty_schedule" "test" {
 				if err := api.UpdateSchedule(context.Background(), serverID, id, settings); err != nil {
 					t.Fatal(err)
 				}
-			}, Config: config(false, "0 4 * * mon"), ConfigPlanChecks: updatePlan, Check: resource.TestCheckResourceAttr("crafty_schedule.test", "command", "say scheduled-test")},
+			}, Config: config(false, "0 4 * * mon"), ConfigPlanChecks: updatePlan, Check: resource.ComposeTestCheckFunc(resource.TestCheckResourceAttr("crafty_schedule.test", "command", command), resource.TestCheckResourceAttr("crafty_schedule.test", "backup_id", backupID))},
 			{Config: config(true, ""), ConfigPlanChecks: updatePlan},
 			{Config: config(true, ""), PlanOnly: true, ConfigPlanChecks: resource.ConfigPlanChecks{PostApplyPreRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
 		},

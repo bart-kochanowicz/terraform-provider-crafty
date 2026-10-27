@@ -33,6 +33,7 @@ type scheduleModel struct {
 	Enabled      types.Bool   `tfsdk:"enabled"`
 	Action       types.String `tfsdk:"action"`
 	Command      types.String `tfsdk:"command"`
+	BackupID     types.String `tfsdk:"backup_id"`
 	Interval     types.Int64  `tfsdk:"interval"`
 	IntervalType types.String `tfsdk:"interval_type"`
 	StartTime    types.String `tfsdk:"start_time"`
@@ -50,6 +51,7 @@ func (s *scheduleResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 		"server_id":     schema.StringAttribute{Required: true, PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()}, Description: "Crafty server ID."},
 		"name":          schema.StringAttribute{Required: true, Description: "Schedule display name."},
 		"command":       schema.StringAttribute{Required: true, Description: "Command queued by Crafty, such as a console command or restart_server."},
+		"backup_id":     schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString(""), Description: "Existing backup policy ID for backup_server. Empty uses the server default policy."},
 		"action":        schema.StringAttribute{Optional: true, Computed: true, Default: stringdefault.StaticString("command"), Description: "Crafty action label. Defaults to command; command determines the queued operation."},
 		"enabled":       schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(true), Description: "Whether the scheduler runs this task. Must be true when creating."},
 		"interval":      schema.Int64Attribute{Optional: true, Computed: true, Default: int64default.StaticInt64(1), Description: "Positive interval count. Ignored when cron_string is set."},
@@ -87,6 +89,14 @@ func (s *scheduleResource) ValidateConfig(ctx context.Context, req resource.Vali
 			r.Diagnostics.AddAttributeError(path.Root(key), "Empty schedule setting", "Provide a nonempty value.")
 		}
 	}
+	if !m.BackupID.IsUnknown() && m.BackupID.ValueString() != "" {
+		if !scheduleServerID.MatchString(m.BackupID.ValueString()) {
+			r.Diagnostics.AddAttributeError(path.Root("backup_id"), "Invalid backup policy ID", "Use the Crafty backup policy ID containing lowercase letters, digits and hyphens.")
+		}
+		if !m.Command.IsUnknown() && m.Command.ValueString() != "backup_server" {
+			r.Diagnostics.AddAttributeError(path.Root("backup_id"), "Backup policy requires backup_server", "Set command to backup_server when selecting a backup policy.")
+		}
+	}
 	if !m.Interval.IsUnknown() && !m.Interval.IsNull() && m.Interval.ValueInt64() < 1 {
 		r.Diagnostics.AddAttributeError(path.Root("interval"), "Invalid interval", "Use a positive integer.")
 	}
@@ -110,7 +120,7 @@ func (s *scheduleResource) ValidateConfig(ctx context.Context, req resource.Vali
 	}
 }
 func (m scheduleModel) settings() client.ScheduleSettings {
-	return client.ScheduleSettings{Name: m.Name.ValueString(), Enabled: m.Enabled.ValueBool(), Action: m.Action.ValueString(), Command: m.Command.ValueString(), Interval: m.Interval.ValueInt64(), IntervalType: m.IntervalType.ValueString(), StartTime: m.StartTime.ValueString(), Cron: m.Cron.ValueString()}
+	return client.ScheduleSettings{Name: m.Name.ValueString(), Enabled: m.Enabled.ValueBool(), Action: m.Action.ValueString(), Command: m.Command.ValueString(), Interval: m.Interval.ValueInt64(), IntervalType: m.IntervalType.ValueString(), StartTime: m.StartTime.ValueString(), Cron: m.Cron.ValueString(), ActionID: m.BackupID.ValueString()}
 }
 func (s *scheduleResource) Create(ctx context.Context, req resource.CreateRequest, r *resource.CreateResponse) {
 	var m scheduleModel
@@ -142,8 +152,11 @@ func (s *scheduleResource) observe(ctx context.Context, m scheduleModel) (client
 	if w.Name == nil || w.Enabled == nil || w.Action == nil || w.Command == nil || w.Interval == nil || w.IntervalType == nil || w.StartTime == nil || w.Cron == nil || w.OneTime == nil || w.Delay == nil {
 		return w, fmt.Errorf("required schedule configuration fields are missing")
 	}
-	if *w.OneTime || w.Parent != nil || *w.Delay != 0 || (w.ActionID != nil && *w.ActionID != "") {
-		return w, fmt.Errorf("only independent recurring tasks without backup references are supported")
+	if *w.OneTime || w.Parent != nil || *w.Delay != 0 {
+		return w, fmt.Errorf("only independent recurring tasks are supported")
+	}
+	if w.ActionID != nil && *w.ActionID != "" && (*w.Command != "backup_server" || !scheduleServerID.MatchString(*w.ActionID)) {
+		return w, fmt.Errorf("backup policy references require backup_server and a valid policy ID")
 	}
 	return w, nil
 }
@@ -157,6 +170,10 @@ func (s *scheduleResource) Read(ctx context.Context, req resource.ReadRequest, r
 	if err != nil {
 		r.Diagnostics.AddError("Unable to read Crafty schedule", err.Error())
 		return
+	}
+	m.BackupID = types.StringValue("")
+	if w.ActionID != nil {
+		m.BackupID = types.StringValue(*w.ActionID)
 	}
 	m.Name, m.Enabled, m.Action, m.Command = types.StringValue(*w.Name), types.BoolValue(*w.Enabled), types.StringValue(*w.Action), types.StringValue(*w.Command)
 	m.Interval, m.IntervalType, m.StartTime, m.Cron = types.Int64Value(*w.Interval), types.StringValue(*w.IntervalType), types.StringValue(*w.StartTime), types.StringValue(*w.Cron)

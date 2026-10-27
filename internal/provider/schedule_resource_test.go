@@ -103,3 +103,35 @@ func TestScheduleCreationRequiresIdentity(t *testing.T) {
 		})
 	}
 }
+
+func TestScheduleBackupPolicyValidation(t *testing.T) {
+	for _, test := range []struct {
+		name, command string
+		backupID      types.String
+		valid         bool
+	}{
+		{"default backup", "backup_server", types.StringValue(""), true},
+		{"selected policy", "backup_server", types.StringValue("backup-policy"), true},
+		{"unknown policy", "backup_server", types.StringUnknown(), true},
+		{"console command", "say test", types.StringValue(""), true},
+		{"policy with console command", "say test", types.StringValue("backup-policy"), false},
+		{"invalid policy ID", "backup_server", types.StringValue("../backup"), false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			s := &scheduleResource{}
+			var schema resource.SchemaResponse
+			s.Schema(ctx, resource.SchemaRequest{}, &schema)
+			state := tfsdk.State{Schema: schema.Schema}
+			model := scheduleModel{ServerID: types.StringValue("abc"), Name: types.StringValue("Backup"), Command: types.StringValue(test.command), BackupID: test.backupID}
+			if d := state.Set(ctx, &model); d.HasError() {
+				t.Fatal(d)
+			}
+			var response resource.ValidateConfigResponse
+			s.ValidateConfig(ctx, resource.ValidateConfigRequest{Config: tfsdk.Config{Schema: schema.Schema, Raw: state.Raw}}, &response)
+			if response.Diagnostics.HasError() == test.valid {
+				t.Fatalf("unexpected validation result: %v", response.Diagnostics)
+			}
+		})
+	}
+}

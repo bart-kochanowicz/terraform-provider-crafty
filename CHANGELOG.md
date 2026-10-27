@@ -3,6 +3,11 @@
 The initial release was published on 2026-10-03. Download binaries and checksums
 from [GitHub Releases](https://github.com/bart-kochanowicz/terraform-provider-crafty/releases/tag/v0.1.0).
 
+## 0.1.9 — 2026-10-27
+
+- Select an existing backup policy with `crafty_schedule.backup_id`; omitted IDs keep using the server's default policy.
+- Support import and drift correction for backup schedules, while rejecting policy references on other commands.
+
 ## 0.1.8 — 2026-10-25
 
 - Install Minecraft Java servers from ZIP server packs through Crafty's chunked upload and import API, with SHA-256, entry CRC and path validation.
