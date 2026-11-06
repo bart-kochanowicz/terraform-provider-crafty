@@ -4,16 +4,25 @@ import (
 	"context"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/float64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 func (s *serverResource) Schema(ctx context.Context, _ resource.SchemaRequest, r *resource.SchemaResponse) {
 	replaceString := []planmodifier.String{stringplanmodifier.RequiresReplace()}
 	replaceInt := []planmodifier.Int64{int64planmodifier.RequiresReplace()}
+	replaceMemory := []planmodifier.Float64{float64planmodifier.RequiresReplaceIf(func(ctx context.Context, req planmodifier.Float64Request, resp *float64planmodifier.RequiresReplaceIfFuncResponse) {
+		var managed types.Bool
+		resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("manage_memory"), &managed)...)
+		resp.RequiresReplace = !managed.ValueBool()
+	}, "Memory changes replace the server unless manage_memory is enabled.", "Memory changes replace the server unless `manage_memory` is enabled.")}
 	r.Schema = schema.Schema{
 		Description: "A Minecraft Java server downloaded by Crafty or installed from a ZIP server pack. Name, automatic start, monitoring settings, and execution command support in-place updates; installation inputs require replacement.",
 		Blocks: map[string]schema.Block{
@@ -28,8 +37,9 @@ func (s *serverResource) Schema(ctx context.Context, _ resource.SchemaRequest, r
 			"archive_sha256":        schema.StringAttribute{Optional: true, PlanModifiers: replaceString, Description: "Expected SHA-256 of archive_path, checked before upload. Required for ZIP installation. Changes replace the server."},
 			"archive_internal_path": schema.StringAttribute{Optional: true, PlanModifiers: replaceString, Description: "Relative directory inside the ZIP containing the server files; omit for the archive root. Changes replace the server."},
 			"executable":            schema.StringAttribute{Optional: true, PlanModifiers: replaceString, Description: "Path to the server executable relative to archive_internal_path. Required for ZIP installation. Changes replace the server."},
-			"mem_min":               schema.Int64Attribute{Required: true, PlanModifiers: replaceInt, Description: "Minimum Java memory in Crafty download units (1000 JVM MiB per unit). Changes replace the server."},
-			"mem_max":               schema.Int64Attribute{Required: true, PlanModifiers: replaceInt, Description: "Maximum Java memory in Crafty download units (1000 JVM MiB per unit). Changes replace the server."},
+			"mem_min":               schema.Float64Attribute{Required: true, PlanModifiers: replaceMemory, Description: "Minimum Java memory in Crafty units (1000 JVM MiB per unit). Creation-only unless manage_memory is enabled. Managed values may be fractional in whole-MiB increments."},
+			"mem_max":               schema.Float64Attribute{Required: true, PlanModifiers: replaceMemory, Description: "Maximum Java memory in Crafty units (1000 JVM MiB per unit). Creation-only unless manage_memory is enabled. Managed values may be fractional in whole-MiB increments."},
+			"manage_memory":         schema.BoolAttribute{Optional: true, Computed: true, Default: booldefault.StaticBool(false), Description: "Manage mem_min and mem_max through inline JVM -Xms/-Xmx flags without replacement. Default false preserves creation-only behavior. Reads visible flags for drift; does not inspect argument files or restart Minecraft. Explicit execution_command must contain matching heap flags."},
 			"host":                  schema.StringAttribute{Required: true, PlanModifiers: replaceString, Description: "Monitoring host reachable from Crafty. Changes replace the server."},
 			"port":                  schema.Int64Attribute{Required: true, PlanModifiers: replaceInt, Description: "Monitoring port and generated server.properties port. An imported server.properties file retains its own port. Changes replace the server."},
 			"auto_start":            schema.BoolAttribute{Optional: true, Computed: true, Description: "Automatic start setting. Omit to observe Crafty; explicit true or false is managed through PATCH."},

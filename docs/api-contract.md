@@ -51,11 +51,12 @@ units; the [Java command reference](https://docs.oracle.com/javase/8/docs/techno
 shows equivalent byte and `m` examples. Thus a Crafty input unit is **1000 MiB**,
 not exactly 1 GiB (1024 MiB). `mem_max = 2` produces 2000 MiB of maximum heap.
 
-The provider retains its existing integer inputs and does not add another
-conversion. Earlier descriptions labeling them as GiB were inaccurate. This
+The provider retains whole integer inputs in its default creation-only mode.
+Managed memory keeps the same units and allows fractions representing whole JVM
+MiB. Earlier descriptions labeling these units as GiB were inaccurate. This
 contract applies to Java `download_jar`; do not extrapolate it to imports, Bedrock,
 SteamCMD, or modded-engine installation paths. Fractional inputs are accepted by
-the observed API but are not exposed by the Terraform resource's Int64 schema.
+the observed download API.
 The tests inspect configured JVM flags; they do not start Minecraft or measure
 actual process memory usage.
 
@@ -97,10 +98,17 @@ Changing `server_port` updates monitoring while leaving the generated
 `server.properties` unchanged. Updating an arbitrary execution command is not an
 equivalent, engine-independent update of the download inputs. The provider exposes
 name, optional `auto_start`, `monitoring_host`,
-`monitoring_port`, and `execution_command` as mutable fields. Original RAM, engine,
-version, host, and port inputs still require replacement. Explicit launch commands
+`monitoring_port`, and `execution_command` as mutable fields. In default mode,
+original RAM, engine, version, host, and port inputs still require replacement. Explicit launch commands
 override generated RAM flags without changing stored creation inputs. This is a
 deliberate provider scope, not an asserted restriction of the Crafty API.
+
+With `manage_memory = true`, memory changes use only the verified
+`execution_command` PATCH field. Reads derive memory values from visible inline
+JVM flags; no standalone memory PATCH fields or server restart are introduced.
+Direct Java commands are supported, with conservative diagnostics for wrappers or
+ambiguous argument-file launchers. See the resource reference for command
+precedence and argument-file limitations.
 
 ID-only import remains unavailable because the verified GET fields do not reliably
 reconstruct the required original download payload. The Terraform acceptance suite

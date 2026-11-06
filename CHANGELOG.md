@@ -3,6 +3,10 @@
 The initial release was published on 2026-10-03. Download binaries and checksums
 from [GitHub Releases](https://github.com/bart-kochanowicz/terraform-provider-crafty/releases/tag/v0.1.0).
 
+## Unreleased
+
+- Opt in to in-place Java heap updates and drift detection with `crafty_minecraft_server.manage_memory`, preserving existing creation-only behavior and 1000 MiB memory units.
+
 ## 0.1.9 — 2026-10-27
 
 - Select an existing backup policy with `crafty_schedule.backup_id`; omitted IDs keep using the server's default policy.

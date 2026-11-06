@@ -105,15 +105,19 @@ data "crafty_server" "lookup" {
 }
 `, endpoint, serverName, engine, version, extra)
 	}
-	check := func(expectedName string) resource.TestCheckFunc {
+	check := func(expectedName string, memory ...string) resource.TestCheckFunc {
+		minimum, maximum := "1", "2"
+		if len(memory) == 2 {
+			minimum, maximum = memory[0], memory[1]
+		}
 		return resource.ComposeTestCheckFunc(
 			resource.TestCheckResourceAttrPair("data.crafty_server.lookup", "id", "crafty_minecraft_server.test", "id"),
 			resource.TestCheckResourceAttr("data.crafty_server.lookup", "name", expectedName),
 			resource.TestCheckResourceAttr("crafty_minecraft_server.test", "name", expectedName),
 			resource.TestCheckResourceAttr("crafty_minecraft_server.test", "engine", engine),
 			resource.TestCheckResourceAttr("crafty_minecraft_server.test", "version", version),
-			resource.TestCheckResourceAttr("crafty_minecraft_server.test", "mem_min", "1"),
-			resource.TestCheckResourceAttr("crafty_minecraft_server.test", "mem_max", "2"),
+			resource.TestCheckResourceAttr("crafty_minecraft_server.test", "mem_min", minimum),
+			resource.TestCheckResourceAttr("crafty_minecraft_server.test", "mem_max", maximum),
 			resource.TestCheckResourceAttr("crafty_minecraft_server.test", "host", "127.0.0.1"),
 			resource.TestCheckResourceAttr("crafty_minecraft_server.test", "port", "25565"),
 			resource.TestCheckResourceAttrSet("crafty_minecraft_server.test", "auto_start"),
@@ -160,6 +164,9 @@ data "crafty_server" "lookup" {
 		resource.TestCheckResourceAttr("crafty_minecraft_server.test", "monitoring_host", "127.0.0.3"),
 		resource.TestCheckResourceAttr("crafty_minecraft_server.test", "monitoring_port", "25567"),
 		resource.TestCheckResourceAttr("crafty_minecraft_server.test", "execution_command", "java -Xms2000M -Xmx3000M -jar paper.jar nogui"))
+	managedConfig := func(max string, protected bool) string {
+		return strings.Replace(config(renamed, fmt.Sprintf("manage_memory = true\nauto_start = false\nlifecycle { prevent_destroy = %t }", protected)), "mem_max = 2", "mem_max = "+max, 1)
+	}
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){"crafty": providerserver.NewProtocol6WithError(New("test")())},
@@ -278,6 +285,31 @@ data "crafty_server" "lookup" {
 					return nil
 				}},
 			{Config: strings.Replace(config(renamed), "mem_max = 2", "mem_max = 3", 1), PlanOnly: true, ConfigPlanChecks: emptyPlan},
+			{Config: managedConfig("20", true), ConfigPlanChecks: updatePlan, Check: check(renamed, "1", "20")},
+			{PreConfig: func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				servers, err := api.ListServers(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, server := range servers {
+					if server.ID == id && server.ExecutionCommand != nil {
+						command := strings.Replace(*server.ExecutionCommand, "-Xmx20000M", "-Xmx12288M", 1)
+						if command == *server.ExecutionCommand {
+							t.Fatal("managed maximum heap flag missing")
+						}
+						if err := api.UpdateServer(ctx, id, client.UpdateServerRequest{ExecutionCommand: &command}); err != nil {
+							t.Fatal(err)
+						}
+						return
+					}
+				}
+				t.Fatal("managed server disappeared before drift test")
+			}, Config: managedConfig("20", true), ConfigPlanChecks: updatePlan, Check: check(renamed, "1", "20")},
+			{Config: managedConfig("20.48", true), ConfigPlanChecks: updatePlan, Check: check(renamed, "1", "20.48")},
+			// Release only this disposable fixture's safeguard before destroy.
+			{Config: managedConfig("20.48", false), Check: check(renamed, "1", "20.48"), ConfigPlanChecks: emptyPlan},
 		},
 	}) // resource.Test always runs Terraform destroy and CheckDestroy at the end.
 }

@@ -17,8 +17,9 @@ type serverModel struct {
 	Name                types.String   `tfsdk:"name"`
 	Engine              types.String   `tfsdk:"engine"`
 	Version             types.String   `tfsdk:"version"`
-	MemMin              types.Int64    `tfsdk:"mem_min"`
-	MemMax              types.Int64    `tfsdk:"mem_max"`
+	MemMin              types.Float64  `tfsdk:"mem_min"`
+	MemMax              types.Float64  `tfsdk:"mem_max"`
+	ManageMemory        types.Bool     `tfsdk:"manage_memory"`
 	Host                types.String   `tfsdk:"host"`
 	Port                types.Int64    `tfsdk:"port"`
 	AutoStart           types.Bool     `tfsdk:"auto_start"`
@@ -41,8 +42,14 @@ func (m serverModel) validate() error {
 	if !validServerName(m.Name.ValueString()) {
 		return fmt.Errorf("name must contain at least two characters and must not contain slashes, backslashes, or #")
 	}
-	if m.MemMin.ValueInt64() < 1 || m.MemMax.ValueInt64() < m.MemMin.ValueInt64() {
+	if m.MemMin.ValueFloat64() < 1 || m.MemMax.ValueFloat64() < m.MemMin.ValueFloat64() {
 		return fmt.Errorf("memory values must satisfy 1 <= mem_min <= mem_max")
+	}
+	if err := m.validateMemory(); err != nil {
+		return err
+	}
+	if err := m.validateHeapCommand(); err != nil {
+		return err
 	}
 	if m.Port.ValueInt64() < 1 || m.Port.ValueInt64() > 65535 {
 		return fmt.Errorf("port must be between 1 and 65535")
@@ -64,7 +71,7 @@ func (m serverModel) createRequest() client.CreateJavaServerRequest {
 		Monitoring: client.JavaMonitoring{Host: m.Host.ValueString(), Port: m.Port.ValueInt64()},
 		Java: client.JavaCreateData{CreateType: "download_jar", Download: &client.JavaDownload{
 			Category: "mc_java_servers", Engine: m.Engine.ValueString(), Version: m.Version.ValueString(),
-			MemMin: m.MemMin.ValueInt64(), MemMax: m.MemMax.ValueInt64(), Port: m.Port.ValueInt64(),
+			MemMin: m.MemMin.ValueFloat64(), MemMax: m.MemMax.ValueFloat64(), Port: m.Port.ValueInt64(),
 		}},
 	}
 }
@@ -73,7 +80,7 @@ func (m serverModel) createImportRequest(name string) client.CreateJavaServerReq
 	req := m.createRequest()
 	req.Java = client.JavaCreateData{CreateType: "import_server", Import: &client.JavaImport{
 		ArchiveName: name, InternalPath: m.ArchiveInternalPath.ValueString(), Executable: m.Executable.ValueString(),
-		MemMin: m.MemMin.ValueInt64(), MemMax: m.MemMax.ValueInt64(), Port: m.Port.ValueInt64(),
+		MemMin: m.MemMin.ValueFloat64(), MemMax: m.MemMax.ValueFloat64(), Port: m.Port.ValueInt64(),
 	}}
 	return req
 }

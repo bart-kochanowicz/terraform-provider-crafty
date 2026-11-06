@@ -30,15 +30,18 @@ resource "crafty_minecraft_server" "example" {
   version = "1.21.1"
   mem_min = 1
   mem_max = 2
-  host    = "127.0.0.1"
-  port    = 25565
+  # Opt in to in-place heap updates; memory units remain 1000 MiB.
+  # manage_memory = true
+  host = "127.0.0.1"
+  port = 25565
 
   # These settings can change without replacing the server.
   auto_start      = false
   monitoring_host = "127.0.0.1"
   monitoring_port = 25565
 
-  # Optional full-command override; memory flags take precedence over mem_min/max.
+  # Full-command overrides take precedence in default creation-only memory mode.
+  # Managed memory requires matching inline heap flags in an explicit command.
   # execution_command = "java -Xms1500M -Xmx2500M -jar paper.jar nogui"
 }
 
