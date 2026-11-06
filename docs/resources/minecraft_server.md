@@ -38,8 +38,8 @@ resource "crafty_minecraft_server" "example" {
 ### Required
 
 - `host` (String) Monitoring host reachable from Crafty. Changes replace the server.
-- `mem_max` (Number) Maximum Java memory in Crafty download units (1000 JVM MiB per unit). Changes replace the server.
-- `mem_min` (Number) Minimum Java memory in Crafty download units (1000 JVM MiB per unit). Changes replace the server.
+- `mem_max` (Number) Maximum Java memory in Crafty units (1000 JVM MiB per unit). Creation-only unless manage_memory is enabled. Managed values may be fractional in whole-MiB increments.
+- `mem_min` (Number) Minimum Java memory in Crafty units (1000 JVM MiB per unit). Creation-only unless manage_memory is enabled. Managed values may be fractional in whole-MiB increments.
 - `name` (String) Server name; at least two characters, excluding slashes, backslashes, and #. POST name and PATCH server_name.
 - `port` (Number) Monitoring port and generated server.properties port. An imported server.properties file retains its own port. Changes replace the server.
 
@@ -52,6 +52,7 @@ resource "crafty_minecraft_server" "example" {
 - `engine` (String) Download engine identifier, such as paper. Required with version unless archive_path is set. Changes replace the server.
 - `executable` (String) Path to the server executable relative to archive_internal_path. Required for ZIP installation. Changes replace the server.
 - `execution_command` (String) Current launch command. Omit to observe Crafty's generated command; explicit values override it through PATCH, including its JVM memory flags. Does not restart the server.
+- `manage_memory` (Boolean) Manage mem_min and mem_max through inline JVM -Xms/-Xmx flags without replacement. Default false preserves creation-only behavior. Reads visible flags for drift; does not inspect argument files or restart Minecraft. Explicit execution_command must contain matching heap flags.
 - `monitoring_host` (String) Current monitoring address. Defaults to the host creation input; PATCH updates monitoring only.
 - `monitoring_port` (Number) Current monitoring port, 1–65535. Defaults to the port creation input; PATCH does not change server.properties.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
@@ -103,7 +104,33 @@ not upgrade or migrate an existing world. Imported `server.properties` values
 are preserved: align its port with `port`. Extracted files and EULA configuration
 come from the pack; Terraform does not start or validate its Minecraft process.
 
-Crafty's `download_jar` converts memory input `1/2` into JVM flags `-Xms1000M -Xmx2000M`; these inputs are not exact GiB. The provider accepts whole integer units. Names need at least two characters and may not contain slashes, backslashes, or `#`. See the [API contract](../api-contract.md) for tested versions, engines and supporting evidence.
+Crafty's `download_jar` converts memory input `1/2` into JVM flags `-Xms1000M -Xmx2000M`; these inputs are not exact GiB. Creation-only mode accepts whole integer units. Names need at least two characters and may not contain slashes, backslashes, or `#`. See the [API contract](../api-contract.md) for tested versions, engines and supporting evidence.
+
+## Managed Java memory
+
+Set `manage_memory = true` to update `mem_min` and `mem_max` without replacement.
+Values keep the existing units: `mem_max = 20` means `-Xmx20000M`, approximately
+19.53 GiB. Fractional managed values must represent whole JVM MiB; for example,
+`20.48` represents exactly 20 GiB.
+
+Omit `execution_command` to edit the observed direct Java command. The provider
+preserves unrelated arguments and quoting, changes inline heap flags, and adds a
+missing flag at an existing heap option or before an explicit Java entry point.
+It does not read argument files or execute/parse launcher scripts. Commands whose
+JVM option position cannot be determined fail before PATCH. Keep heap flags after
+any argument file that supplies competing JVM flags and before the application's
+entry point; flags hidden in files are not reconstructed from the API.
+
+An explicit `execution_command` must contain both heap flags matching the memory
+inputs. It is sent exactly as configured. Use locals to share memory values with a
+custom command rather than maintaining conflicting values.
+
+GET refreshes managed memory from the last visible JVM heap flags, including
+`G`, `M`, `K`, or byte units. Missing inline values are reported as null and planned
+for correction where a safe insertion point exists. Updates do not restart the
+game; the new limit takes effect on its next start. The default
+`manage_memory = false` preserves creation-only memory inputs, their replacement
+behavior, and opaque custom commands.
 
 ## Lifecycle and limitations
 
@@ -124,8 +151,9 @@ Minecraft networking consistent separately.
 `execution_command` is the complete launch command, rather than a RAM editor.
 Explicit values take precedence over the command generated from `mem_min` and
 `mem_max`, and are stored exactly without parsing or rewriting shell arguments.
-The original installation and memory inputs remain in state and still require
-replacement when changed. Supply a command valid for the actual executable;
+Original installation inputs and creation-only memory inputs remain in state and
+require replacement when changed. With `manage_memory = true`, explicit commands
+must agree with the managed memory inputs. Supply a command valid for the actual executable;
 Terraform does not run, restart, or validate a Minecraft process.
 
 Omitting an optional setting means observing the panel value. Removing it from

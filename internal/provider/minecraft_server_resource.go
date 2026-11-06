@@ -98,6 +98,14 @@ func (s *serverResource) Create(ctx context.Context, req resource.CreateRequest,
 	if r.Diagnostics.HasError() {
 		return
 	}
+	if requested.ManageMemory.ValueBool() && (requested.ExecutionCommand.IsNull() || requested.ExecutionCommand.IsUnknown()) {
+		command, err := rewriteHeapMemory(observed.ExecutionCommand.ValueString(), requested.MemMin.ValueFloat64(), requested.MemMax.ValueFloat64())
+		if err != nil {
+			pending(err)
+			return
+		}
+		requested.ExecutionCommand = types.StringValue(command)
+	}
 	patch := requested.settingsPatch(nil)
 	if !emptyPatch(patch) {
 		if err := s.client.UpdateServer(opCtx, m.ID.ValueString(), patch); err != nil {
@@ -135,6 +143,25 @@ func (s *serverResource) refresh(ctx context.Context, m *serverModel) (bool, err
 			m.MonitoringHost = types.StringValue(*remote.MonitoringHost)
 			m.MonitoringPort = types.Int64Value(*remote.MonitoringPort)
 			m.ExecutionCommand = types.StringValue(*remote.ExecutionCommand)
+			if m.ManageMemory.IsNull() {
+				m.ManageMemory = types.BoolValue(false)
+			}
+			if m.ManageMemory.ValueBool() {
+				min, max, err := heapMemory(*remote.ExecutionCommand)
+				if err != nil {
+					return false, fmt.Errorf("unable to read managed Java memory: %w", err)
+				}
+				if min != nil {
+					m.MemMin = types.Float64Value(*min)
+				} else {
+					m.MemMin = types.Float64Null()
+				}
+				if max != nil {
+					m.MemMax = types.Float64Value(*max)
+				} else {
+					m.MemMax = types.Float64Null()
+				}
+			}
 			// Preserve original download inputs; GET does not reconstruct their payload.
 			return true, nil
 		}
@@ -195,6 +222,10 @@ func (s *serverResource) Update(ctx context.Context, req resource.UpdateRequest,
 	opCtx, cancel := context.WithTimeout(ctx, duration)
 	defer cancel()
 	m.adoptUnknownSettings(prior)
+	if err := m.validateHeapCommand(); err != nil {
+		r.Diagnostics.AddError("Conflicting managed memory command", err.Error())
+		return
+	}
 	patch := m.settingsPatch(&prior)
 	if emptyPatch(patch) {
 		r.Diagnostics.Append(r.State.Set(ctx, &m)...)
@@ -289,14 +320,20 @@ func (s *serverResource) ValidateConfig(ctx context.Context, req resource.Valida
 		}
 	}
 
-	if !m.MemMin.IsNull() && !m.MemMin.IsUnknown() && m.MemMin.ValueInt64() < 1 {
+	if !m.MemMin.IsNull() && !m.MemMin.IsUnknown() && m.MemMin.ValueFloat64() < 1 {
 		r.Diagnostics.AddError("Invalid minimum memory", "mem_min must be at least 1.")
 	}
-	if !m.MemMax.IsNull() && !m.MemMax.IsUnknown() && m.MemMax.ValueInt64() < 1 {
+	if !m.MemMax.IsNull() && !m.MemMax.IsUnknown() && m.MemMax.ValueFloat64() < 1 {
 		r.Diagnostics.AddError("Invalid maximum memory", "mem_max must be at least 1.")
 	}
-	if !m.MemMin.IsUnknown() && !m.MemMax.IsUnknown() && !m.MemMin.IsNull() && !m.MemMax.IsNull() && m.MemMax.ValueInt64() < m.MemMin.ValueInt64() {
+	if !m.MemMin.IsUnknown() && !m.MemMax.IsUnknown() && !m.MemMin.IsNull() && !m.MemMax.IsNull() && m.MemMax.ValueFloat64() < m.MemMin.ValueFloat64() {
 		r.Diagnostics.AddError("Invalid memory range", "mem_max must be greater than or equal to mem_min.")
+	}
+	if err := m.validateMemory(); err != nil {
+		r.Diagnostics.AddError("Invalid memory units", err.Error())
+	}
+	if err := m.validateHeapCommand(); err != nil {
+		r.Diagnostics.AddError("Conflicting managed memory command", err.Error())
 	}
 }
 

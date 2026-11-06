@@ -63,7 +63,33 @@ not upgrade or migrate an existing world. Imported `server.properties` values
 are preserved: align its port with `port`. Extracted files and EULA configuration
 come from the pack; Terraform does not start or validate its Minecraft process.
 
-Crafty's `download_jar` converts memory input `1/2` into JVM flags `-Xms1000M -Xmx2000M`; these inputs are not exact GiB. The provider accepts whole integer units. Names need at least two characters and may not contain slashes, backslashes, or `#`. See the [API contract](../api-contract.md) for tested versions, engines and supporting evidence.
+Crafty's `download_jar` converts memory input `1/2` into JVM flags `-Xms1000M -Xmx2000M`; these inputs are not exact GiB. Creation-only mode accepts whole integer units. Names need at least two characters and may not contain slashes, backslashes, or `#`. See the [API contract](../api-contract.md) for tested versions, engines and supporting evidence.
+
+## Managed Java memory
+
+Set `manage_memory = true` to update `mem_min` and `mem_max` without replacement.
+Values keep the existing units: `mem_max = 20` means `-Xmx20000M`, approximately
+19.53 GiB. Fractional managed values must represent whole JVM MiB; for example,
+`20.48` represents exactly 20 GiB.
+
+Omit `execution_command` to edit the observed direct Java command. The provider
+preserves unrelated arguments and quoting, changes inline heap flags, and adds a
+missing flag at an existing heap option or before an explicit Java entry point.
+It does not read argument files or execute/parse launcher scripts. Commands whose
+JVM option position cannot be determined fail before PATCH. Keep heap flags after
+any argument file that supplies competing JVM flags and before the application's
+entry point; flags hidden in files are not reconstructed from the API.
+
+An explicit `execution_command` must contain both heap flags matching the memory
+inputs. It is sent exactly as configured. Use locals to share memory values with a
+custom command rather than maintaining conflicting values.
+
+GET refreshes managed memory from the last visible JVM heap flags, including
+`G`, `M`, `K`, or byte units. Missing inline values are reported as null and planned
+for correction where a safe insertion point exists. Updates do not restart the
+game; the new limit takes effect on its next start. The default
+`manage_memory = false` preserves creation-only memory inputs, their replacement
+behavior, and opaque custom commands.
 
 ## Lifecycle and limitations
 
@@ -84,8 +110,9 @@ Minecraft networking consistent separately.
 `execution_command` is the complete launch command, rather than a RAM editor.
 Explicit values take precedence over the command generated from `mem_min` and
 `mem_max`, and are stored exactly without parsing or rewriting shell arguments.
-The original installation and memory inputs remain in state and still require
-replacement when changed. Supply a command valid for the actual executable;
+Original installation inputs and creation-only memory inputs remain in state and
+require replacement when changed. With `manage_memory = true`, explicit commands
+must agree with the managed memory inputs. Supply a command valid for the actual executable;
 Terraform does not run, restart, or validate a Minecraft process.
 
 Omitting an optional setting means observing the panel value. Removing it from

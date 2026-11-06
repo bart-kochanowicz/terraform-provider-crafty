@@ -75,7 +75,7 @@ func TestAccBackupConfigLive(t *testing.T) {
 		t.Fatal("live backup verification requires the isolated CI Compose project")
 	}
 	api := client.New(endpoint, token)
-	server := serverModel{Name: types.StringValue("tf-backup-test"), Engine: types.StringValue("paper"), Version: types.StringValue("1.21.1"), MemMin: types.Int64Value(1), MemMax: types.Int64Value(2), Host: types.StringValue("127.0.0.1"), Port: types.Int64Value(25565)}
+	server := serverModel{Name: types.StringValue("tf-backup-test"), Engine: types.StringValue("paper"), Version: types.StringValue("1.21.1"), MemMin: types.Float64Value(1), MemMax: types.Float64Value(2), Host: types.StringValue("127.0.0.1"), Port: types.Int64Value(25565)}
 	created, err := api.CreateJavaServer(context.Background(), server.createRequest())
 	if err != nil || created.ID == "" {
 		t.Fatalf("create test server: %v", err)

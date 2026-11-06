@@ -25,22 +25,22 @@ type JavaCreateData struct {
 // JavaDownload specifies the engine, version, memory, and server port.
 // Crafty download_jar multiplies each memory input by 1000 for JVM M flags.
 type JavaDownload struct {
-	Category string `json:"category"`
-	Engine   string `json:"type"`
-	Version  string `json:"version"`
-	MemMin   int64  `json:"mem_min"`
-	MemMax   int64  `json:"mem_max"`
-	Port     int64  `json:"server_properties_port"`
+	Category string  `json:"category"`
+	Engine   string  `json:"type"`
+	Version  string  `json:"version"`
+	MemMin   float64 `json:"mem_min"`
+	MemMax   float64 `json:"mem_max"`
+	Port     int64   `json:"server_properties_port"`
 }
 
 // JavaImport selects an uploaded server pack and its launch executable.
 type JavaImport struct {
-	ArchiveName  string `json:"archive_name"`
-	InternalPath string `json:"archive_internal_path"`
-	Executable   string `json:"jarfile"`
-	MemMin       int64  `json:"mem_min"`
-	MemMax       int64  `json:"mem_max"`
-	Port         int64  `json:"server_properties_port"`
+	ArchiveName  string  `json:"archive_name"`
+	InternalPath string  `json:"archive_internal_path"`
+	Executable   string  `json:"jarfile"`
+	MemMin       float64 `json:"mem_min"`
+	MemMax       float64 `json:"mem_max"`
+	Port         int64   `json:"server_properties_port"`
 }
 
 // CreatedServer contains the identifier returned by server creation.
